@@ -1,9 +1,9 @@
 # magic-releaser
 
-[![ci](https://github.com/yuki-nemurenai/go-magic-releaser/actions/workflows/ci.yml/badge.svg)](https://github.com/yuki-nemurenai/go-magic-releaser/actions/workflows/ci.yml)
-[![release](https://img.shields.io/github/v/release/yuki-nemurenai/go-magic-releaser)](https://github.com/yuki-nemurenai/go-magic-releaser/releases)
-[![Go Reference](https://pkg.go.dev/badge/github.com/yuki-nemurenai/go-magic-releaser.svg)](https://pkg.go.dev/github.com/yuki-nemurenai/go-magic-releaser)
-[![license](https://img.shields.io/github/license/yuki-nemurenai/go-magic-releaser)](LICENSE)
+[![ci](https://github.com/yuki-nemurenai/magic-releaser/actions/workflows/ci.yml/badge.svg)](https://github.com/yuki-nemurenai/magic-releaser/actions/workflows/ci.yml)
+[![release](https://img.shields.io/github/v/release/yuki-nemurenai/magic-releaser)](https://github.com/yuki-nemurenai/magic-releaser/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/yuki-nemurenai/magic-releaser.svg)](https://pkg.go.dev/github.com/yuki-nemurenai/magic-releaser)
+[![license](https://img.shields.io/github/license/yuki-nemurenai/magic-releaser)](LICENSE)
 
 **Fully automated releases from [Conventional Commits](https://www.conventionalcommits.org/), with
 [SemVer](https://semver.org/) or [CalVer](https://calver.org/), for GitHub and GitLab.**
@@ -154,10 +154,10 @@ never moves backwards, even if the newest tag carries a future date. A daily lay
 
 | Method | Command |
 |--------|---------|
-| Binary | Download an archive for Linux, macOS or Windows from [Releases](https://github.com/yuki-nemurenai/go-magic-releaser/releases) |
-| Container image | `docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/yuki-nemurenai/go-magic-releaser:1 release --dry-run` |
-| Go | `go install github.com/yuki-nemurenai/go-magic-releaser/cmd/magic-releaser@latest` |
-| GitHub Actions | [`uses: yuki-nemurenai/go-magic-releaser@v1.0.0`](#github-actions) |
+| Binary | Download an archive for Linux, macOS or Windows from [Releases](https://github.com/yuki-nemurenai/magic-releaser/releases) |
+| Container image | `docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/yuki-nemurenai/magic-releaser:1 release --dry-run` |
+| Go | `go install github.com/yuki-nemurenai/magic-releaser/cmd/magic-releaser@latest` |
+| GitHub Actions | [`uses: yuki-nemurenai/magic-releaser@v1.0.1`](#github-actions) |
 | GitLab CI | [include the template](#gitlab-ci) |
 
 Every release publishes `checksums.txt` next to the archives. The container image is based on
@@ -226,7 +226,7 @@ jobs:
           fetch-depth: 0 # the full history and all tags are required
 
       - id: release
-        uses: yuki-nemurenai/go-magic-releaser@v1.0.0
+        uses: yuki-nemurenai/magic-releaser@v1.0.1
         with:
           versioning: calver
           timezone: Europe/Moscow
@@ -235,7 +235,7 @@ jobs:
         run: echo "Released ${{ steps.release.outputs.tag }}: ${{ steps.release.outputs.release-url }}"
 ```
 
-Pin the action to a release tag (`@v1.0.0`): it downloads the matching prebuilt binary and
+Pin the action to a release tag (`@v1.0.1`): it downloads the matching prebuilt binary and
 verifies its checksum. Any other reference (`@main`, a commit SHA) builds the binary from source
 with `actions/setup-go`.
 
@@ -280,7 +280,7 @@ Include the template and extend its hidden jobs:
 
 ```yaml
 include:
-  - remote: https://raw.githubusercontent.com/yuki-nemurenai/go-magic-releaser/v1.0.0/templates/gitlab-ci.yml
+  - remote: https://raw.githubusercontent.com/yuki-nemurenai/magic-releaser/v1.0.1/templates/gitlab-ci.yml
 
 stages: [release, build]
 

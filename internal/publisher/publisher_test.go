@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/repository"
+	"github.com/yuki-nemurenai/magic-releaser/internal/repository"
 )
 
 func githubInfo() repository.Info {

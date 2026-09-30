@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/pusher"
+	"github.com/yuki-nemurenai/magic-releaser/internal/pusher"
 )
 
 type Versioning string

@@ -1,6 +1,6 @@
 name: magic-releaser
 description: Release from Conventional Commits with SemVer or CalVer, and publish a GitHub release.
-author: go-magic-releaser contributors
+author: magic-releaser contributors
 
 branding:
   icon: tag
@@ -129,7 +129,9 @@ runs:
       uses: actions/setup-go@v6
       with:
         go-version-file: ${{ github.action_path }}/go.mod
-        cache-dependency-path: ${{ github.action_path }}/go.sum
+        # The module cache would be keyed on the caller's repository, which is
+        # not what is built here; a one-off build does not need it.
+        cache: false
 
     - name: Build magic-releaser
       if: steps.install.outputs.mode == 'build'

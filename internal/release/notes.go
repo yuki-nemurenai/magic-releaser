@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/repository"
+	"github.com/yuki-nemurenai/magic-releaser/internal/repository"
 )
 
 // Category maps Conventional Commits types to a changelog section.

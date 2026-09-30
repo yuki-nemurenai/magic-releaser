@@ -13,7 +13,7 @@ import (
 	gogit "github.com/go-git/go-git/v5"
 	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/pusher"
+	"github.com/yuki-nemurenai/magic-releaser/internal/pusher"
 )
 
 var releaseNow = time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC)

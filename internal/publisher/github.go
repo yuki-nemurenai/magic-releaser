@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/repository"
+	"github.com/yuki-nemurenai/magic-releaser/internal/repository"
 )
 
 // githubPublisher talks to the GitHub Releases API.

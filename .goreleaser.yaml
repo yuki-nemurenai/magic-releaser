@@ -36,7 +36,7 @@ dockers_v2:
   - id: magic-releaser
     ids: [magic-releaser]
     images:
-      - ghcr.io/yuki-nemurenai/go-magic-releaser
+      - ghcr.io/yuki-nemurenai/magic-releaser
     tags:
       - "{{ .Version }}"
       - "{{ .Major }}"
@@ -45,7 +45,7 @@ dockers_v2:
       - linux/amd64
       - linux/arm64
     labels:
-      org.opencontainers.image.source: https://github.com/yuki-nemurenai/go-magic-releaser
+      org.opencontainers.image.source: https://github.com/yuki-nemurenai/magic-releaser
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.licenses: MIT
 
@@ -56,7 +56,7 @@ changelog:
 release:
   github:
     owner: yuki-nemurenai
-    name: go-magic-releaser
+    name: magic-releaser
   # magic-releaser has already created the release with its notes; keep them
   # and only add the artifacts.
   mode: keep-existing

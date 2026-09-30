@@ -10,8 +10,8 @@ import (
 	_ "time/tzdata"
 
 	"github.com/spf13/cobra"
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/pusher"
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/release"
+	"github.com/yuki-nemurenai/magic-releaser/internal/pusher"
+	"github.com/yuki-nemurenai/magic-releaser/internal/release"
 )
 
 // Stamped at link time:

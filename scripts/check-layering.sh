@@ -27,7 +27,7 @@ check_absent "./internal/release" 'net/http|plumbing/transport/http' \
   "the core talks to the forge through the publisher and pusher ports"
 check_absent "./internal/repository" 'net/http|plumbing/transport/http' \
   "repository resolves coordinates, it does not communicate"
-check_absent "./internal/pusher" 'yuki-nemurenai/go-magic-releaser/internal/release' \
+check_absent "./internal/pusher" 'yuki-nemurenai/magic-releaser/internal/release' \
   "ports do not depend on the core they serve"
 
 if go list -deps ./internal/publisher | grep -q "internal/release"; then

@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/publisher"
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/pusher"
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/repository"
+	"github.com/yuki-nemurenai/magic-releaser/internal/publisher"
+	"github.com/yuki-nemurenai/magic-releaser/internal/pusher"
+	"github.com/yuki-nemurenai/magic-releaser/internal/repository"
 )
 
 // versionLikeTagPattern matches tags that look like version numbers regardless

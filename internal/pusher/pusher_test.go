@@ -13,7 +13,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	githttp "github.com/go-git/go-git/v5/plumbing/transport/http"
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/repository"
+	"github.com/yuki-nemurenai/magic-releaser/internal/repository"
 )
 
 // newRepoWithBareRemote creates a working repository whose origin is a bare

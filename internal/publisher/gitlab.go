@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yuki-nemurenai/go-magic-releaser/internal/repository"
+	"github.com/yuki-nemurenai/magic-releaser/internal/repository"
 )
 
 // gitlabPublisher talks to the GitLab Releases API.

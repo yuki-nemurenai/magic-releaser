@@ -3,7 +3,7 @@
 # Include it and extend the hidden jobs:
 #
 #   include:
-#     - remote: https://raw.githubusercontent.com/yuki-nemurenai/go-magic-releaser/v1.0.0/templates/gitlab-ci.yml
+#     - remote: https://raw.githubusercontent.com/yuki-nemurenai/magic-releaser/v1.0.1/templates/gitlab-ci.yml
 #
 #   release:
 #     extends: .magic-releaser
@@ -30,7 +30,7 @@
 
 .magic-releaser-base:
   image:
-    name: ghcr.io/yuki-nemurenai/go-magic-releaser:${MAGIC_RELEASER_VERSION}
+    name: ghcr.io/yuki-nemurenai/magic-releaser:${MAGIC_RELEASER_VERSION}
     entrypoint: [""]
   variables:
     MAGIC_RELEASER_VERSION: "1"
