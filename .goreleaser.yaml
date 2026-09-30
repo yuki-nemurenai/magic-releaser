@@ -1,0 +1,62 @@
+# Release build of magic-releaser: binaries for the common platforms and a
+# container image for CI jobs. The release itself, its notes and the tag are
+# created by magic-releaser; GoReleaser only attaches the artifacts.
+version: 2
+
+project_name: magic-releaser
+
+builds:
+  - id: magic-releaser
+    main: ./cmd/magic-releaser
+    binary: magic-releaser
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: magic-releaser
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+dockers_v2:
+  - id: magic-releaser
+    ids: [magic-releaser]
+    images:
+      - ghcr.io/yuki-nemurenai/go-magic-releaser
+    tags:
+      - "{{ .Version }}"
+      - "{{ .Major }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.source: https://github.com/yuki-nemurenai/go-magic-releaser
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.licenses: MIT
+
+changelog:
+  # The notes are written by magic-releaser when it creates the release.
+  disable: true
+
+release:
+  github:
+    owner: yuki-nemurenai
+    name: go-magic-releaser
+  # magic-releaser has already created the release with its notes; keep them
+  # and only add the artifacts.
+  mode: keep-existing

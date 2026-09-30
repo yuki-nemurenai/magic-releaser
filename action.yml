@@ -1,0 +1,202 @@
+name: magic-releaser
+description: Release from Conventional Commits with SemVer or CalVer, and publish a GitHub release.
+author: go-magic-releaser contributors
+
+branding:
+  icon: tag
+  color: blue
+
+# The repository has to be checked out with its full history and tags:
+#
+#   - uses: actions/checkout@v5
+#     with:
+#       fetch-depth: 0
+#
+# Settings left empty here come from .magic-releaser.yaml, then from the
+# built-in defaults.
+inputs:
+  versioning:
+    description: Versioning strategy, semver or calver.
+    default: ""
+  calver-format:
+    description: CalVer layout, e.g. YYYY.0M.MICRO.
+    default: ""
+  timezone:
+    description: IANA timezone the CalVer date is read in, e.g. Europe/Moscow.
+    default: ""
+  tag-format:
+    description: Tag format with a {{version}} placeholder.
+    default: ""
+  config:
+    description: Path to the config file.
+    default: ""
+  token:
+    description: Token that pushes the release and creates the GitHub release.
+    default: ${{ github.token }}
+  push:
+    description: Push the release commit and the tag.
+    default: "true"
+  publish:
+    description: Create the GitHub release.
+    default: "true"
+  draft:
+    description: Create the release as a draft.
+    default: "false"
+  prerelease:
+    description: Mark the release as a prerelease.
+    default: "false"
+  dry-run:
+    description: Only print the calculated release, write nothing.
+    default: "false"
+  args:
+    description: Extra command line arguments for magic-releaser release.
+    default: ""
+
+outputs:
+  released:
+    description: "true when a release was written, false for a dry run or nothing to release."
+    value: ${{ steps.release.outputs.released }}
+  version:
+    description: The released version.
+    value: ${{ steps.release.outputs.version }}
+  previous-version:
+    description: The version of the previous release.
+    value: ${{ steps.release.outputs.previous-version }}
+  tag:
+    description: The release tag.
+    value: ${{ steps.release.outputs.tag }}
+  release-url:
+    description: URL of the GitHub release.
+    value: ${{ steps.release.outputs.release-url }}
+  release-commit:
+    description: Hash of the release commit.
+    value: ${{ steps.release.outputs.release-commit }}
+
+runs:
+  using: composite
+  steps:
+    # A version tag of the action downloads the matching release binary and
+    # verifies its checksum. Any other ref (a branch, a commit) is built from
+    # the action source, which needs Go.
+    - name: Select the installation
+      id: install
+      shell: bash
+      env:
+        ACTION_REF: ${{ github.action_ref }}
+      run: |
+        set -euo pipefail
+        if [[ "$ACTION_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "mode=download" >> "$GITHUB_OUTPUT"
+        else
+          echo "mode=build" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Download magic-releaser
+      if: steps.install.outputs.mode == 'download'
+      shell: bash
+      env:
+        ACTION_REF: ${{ github.action_ref }}
+        ACTION_REPOSITORY: ${{ github.action_repository }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        case "$RUNNER_OS" in
+          Linux) os=linux ext=tar.gz ;;
+          macOS) os=darwin ext=tar.gz ;;
+          Windows) os=windows ext=zip ;;
+          *) echo "unsupported runner OS $RUNNER_OS" >&2; exit 1 ;;
+        esac
+        case "$RUNNER_ARCH" in
+          X64) arch=amd64 ;;
+          ARM64) arch=arm64 ;;
+          *) echo "unsupported runner architecture $RUNNER_ARCH" >&2; exit 1 ;;
+        esac
+        asset="magic-releaser_${os}_${arch}.${ext}"
+        dir="$RUNNER_TEMP/magic-releaser-dist"
+        mkdir -p "$dir"
+        gh release download "$ACTION_REF" --repo "$ACTION_REPOSITORY" \
+          --pattern "$asset" --pattern checksums.txt --dir "$dir" --clobber
+        (cd "$dir" && grep " ${asset}\$" checksums.txt | sha256sum --check --strict)
+        if [[ "$ext" == zip ]]; then
+          unzip -o -q "$dir/$asset" -d "$dir"
+        else
+          tar -xzf "$dir/$asset" -C "$dir"
+        fi
+        echo "$dir" >> "$GITHUB_PATH"
+
+    - name: Set up Go
+      if: steps.install.outputs.mode == 'build'
+      uses: actions/setup-go@v6
+      with:
+        go-version-file: ${{ github.action_path }}/go.mod
+        cache-dependency-path: ${{ github.action_path }}/go.sum
+
+    - name: Build magic-releaser
+      if: steps.install.outputs.mode == 'build'
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        set -euo pipefail
+        mkdir -p "$RUNNER_TEMP/magic-releaser-dist"
+        go build -trimpath -o "$RUNNER_TEMP/magic-releaser-dist/magic-releaser" ./cmd/magic-releaser
+        echo "$RUNNER_TEMP/magic-releaser-dist" >> "$GITHUB_PATH"
+
+    - name: Release
+      id: release
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        INPUT_VERSIONING: ${{ inputs.versioning }}
+        INPUT_CALVER_FORMAT: ${{ inputs.calver-format }}
+        INPUT_TIMEZONE: ${{ inputs.timezone }}
+        INPUT_TAG_FORMAT: ${{ inputs.tag-format }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_PUSH: ${{ inputs.push }}
+        INPUT_PUBLISH: ${{ inputs.publish }}
+        INPUT_DRAFT: ${{ inputs.draft }}
+        INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        INPUT_ARGS: ${{ inputs.args }}
+      run: |
+        set -euo pipefail
+        outputs="$RUNNER_TEMP/magic-releaser.env"
+        : > "$outputs"
+        args=(release --output-file "$outputs")
+        [[ -n "$INPUT_VERSIONING" ]] && args+=(--versioning "$INPUT_VERSIONING")
+        [[ -n "$INPUT_CALVER_FORMAT" ]] && args+=(--calver-format "$INPUT_CALVER_FORMAT")
+        [[ -n "$INPUT_TIMEZONE" ]] && args+=(--timezone "$INPUT_TIMEZONE")
+        [[ -n "$INPUT_TAG_FORMAT" ]] && args+=(--tag-format "$INPUT_TAG_FORMAT")
+        [[ -n "$INPUT_CONFIG" ]] && args+=(--config "$INPUT_CONFIG")
+        [[ "$INPUT_DRAFT" == "true" ]] && args+=(--draft)
+        [[ "$INPUT_PRERELEASE" == "true" ]] && args+=(--prerelease)
+        if [[ "$INPUT_DRY_RUN" == "true" ]]; then
+          args+=(--dry-run)
+        else
+          # The checkout is a detached HEAD on pull requests and a branch on
+          # pushes; the branch name is passed in both cases.
+          [[ "$INPUT_PUSH" == "true" ]] && args+=(--push --push-branch-name "$GITHUB_REF_NAME")
+          [[ "$INPUT_PUBLISH" == "true" ]] && args+=(--publish)
+        fi
+        if [[ -n "$INPUT_ARGS" ]]; then
+          read -r -a extra <<<"$INPUT_ARGS"
+          args+=("${extra[@]}")
+        fi
+
+        if ! git config user.name >/dev/null; then
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        fi
+
+        magic-releaser "${args[@]}"
+
+        while IFS='=' read -r key value; do
+          case "$key" in
+            RELEASE_CREATED) echo "released=$value" ;;
+            RELEASE_VERSION) echo "version=$value" ;;
+            RELEASE_PREVIOUS_VERSION) echo "previous-version=$value" ;;
+            RELEASE_TAG) echo "tag=$value" ;;
+            RELEASE_URL) echo "release-url=$value" ;;
+            RELEASE_COMMIT) echo "release-commit=$value" ;;
+          esac
+        done < "$outputs" >> "$GITHUB_OUTPUT"

@@ -1,0 +1,32 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gochecknoinits
+    - misspell
+    - revive
+    - unconvert
+    - whitespace
+  exclusions:
+    # std-error-handling: writes to an io.Writer for the user log, whose error
+    # cannot be acted upon. comments: doc comments are written where they
+    # explain a decision, not mechanically on every exported identifier.
+    presets:
+      - std-error-handling
+      - comments
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - revive
+
+formatters:
+  enable:
+    - gofmt

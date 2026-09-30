@@ -1,0 +1,14 @@
+# Build output
+/magic-releaser
+/dist/
+
+# Development notes, kept locally only
+/AGENTS.md
+/PLAN.md
+/PROGRESS.md
+/TASKS.md
+
+# OS and editor files
+.DS_Store
+.idea/
+.vscode/

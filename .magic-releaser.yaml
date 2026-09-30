@@ -1,0 +1,5 @@
+# magic-releaser releases itself with SemVer; the Go module needs v-prefixed
+# tags.
+versioning: semver
+tagFormat: "v{{version}}"
+changelog: CHANGELOG.md

@@ -1,0 +1,75 @@
+# GitLab CI template for magic-releaser.
+#
+# Include it and extend the hidden jobs:
+#
+#   include:
+#     - remote: https://raw.githubusercontent.com/yuki-nemurenai/go-magic-releaser/v1.0.0/templates/gitlab-ci.yml
+#
+#   release:
+#     extends: .magic-releaser
+#     stage: release
+#
+#   release:preview:
+#     extends: .magic-releaser-preview
+#     stage: release
+#
+# Credentials, one of:
+#   - GITLAB_TOKEN: a project access token with the api and write_repository
+#     scopes, allowed to push to the default branch. Store it as a masked,
+#     protected CI/CD variable.
+#   - CI_JOB_TOKEN, used automatically when GITLAB_TOKEN is not set, if the
+#     project allows job tokens to push (Settings > CI/CD > Job token
+#     permissions, GitLab 17.2 or later).
+#
+# The release commit is chore(release): <tag>. The job skips it, so a release
+# does not trigger another one; the tag pipeline builds the release. Keep
+# [skip ci] out of the commit message: GitLab would skip the tag pipeline too.
+#
+# Pin MAGIC_RELEASER_VERSION to a release; the default follows the major
+# version.
+
+.magic-releaser-base:
+  image:
+    name: ghcr.io/yuki-nemurenai/go-magic-releaser:${MAGIC_RELEASER_VERSION}
+    entrypoint: [""]
+  variables:
+    MAGIC_RELEASER_VERSION: "1"
+    # Extra arguments, e.g. --timezone Europe/Moscow.
+    MAGIC_RELEASER_ARGS: ""
+    # The release boundary is computed from the full history and every tag.
+    GIT_DEPTH: "0"
+    GIT_STRATEGY: clone
+  before_script:
+    - git config --global user.name "GitLab CI"
+    - git config --global user.email "gitlab-ci@${CI_SERVER_HOST}"
+  artifacts:
+    reports:
+      # RELEASE_CREATED, RELEASE_VERSION, RELEASE_TAG, RELEASE_URL, ... for the
+      # jobs that follow.
+      dotenv: release.env
+
+# Releases the default branch.
+.magic-releaser:
+  extends: .magic-releaser-base
+  # Two releases running at once would compute the same version.
+  resource_group: magic-releaser
+  script:
+    - >
+      magic-releaser release
+      --push
+      --publish
+      --push-branch-name "$CI_COMMIT_BRANCH"
+      --output-file release.env
+      $MAGIC_RELEASER_ARGS
+  rules:
+    - if: '$CI_COMMIT_MESSAGE =~ /^chore\(release\): /'
+      when: never
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == "push"
+
+# Shows the release a merge request would produce, without writing anything.
+.magic-releaser-preview:
+  extends: .magic-releaser-base
+  script:
+    - magic-releaser release --dry-run --output-file release.env $MAGIC_RELEASER_ARGS
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
