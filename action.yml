@@ -126,7 +126,7 @@ runs:
 
     - name: Set up Go
       if: steps.install.outputs.mode == 'build'
-      uses: actions/setup-go@v6
+      uses: actions/setup-go@v7
       with:
         go-version-file: ${{ github.action_path }}/go.mod
         # The module cache would be keyed on the caller's repository, which is
