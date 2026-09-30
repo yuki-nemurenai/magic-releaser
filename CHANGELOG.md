@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.2 - 2026-09-30
+
+Full changelog: https://github.com/yuki-nemurenai/magic-releaser/compare/v1.0.1...v1.0.2
+
+### Bug Fixes
+
+- **build:** New alpine version on Dockerfile ([fdd762c](https://github.com/yuki-nemurenai/magic-releaser/commit/fdd762ceca2360b2262652b261f4cd424fbc8802))
+
 ## 1.0.1 - 2026-09-30
 
 Full changelog: https://github.com/yuki-nemurenai/magic-releaser/compare/v1.0.0...v1.0.1
