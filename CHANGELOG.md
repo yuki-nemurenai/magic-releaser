@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.1.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.0.2...v1.1.0) (2026-10-01)
+
+### Features
+
+- follow the release conventions of GitHub and GitLab ([deb0732](https://github.com/yuki-nemurenai/magic-releaser/commit/deb073259628a1b808bb8c5f444beba9a2b89ceb))
+
+### Miscellaneous
+
+- **deps:** bump actions/setup-go from 6 to 7 ([8b18242](https://github.com/yuki-nemurenai/magic-releaser/commit/8b18242e2cb05c16d1331c780d1274091018f84e))
+- **deps:** bump actions/checkout from 5 to 7 ([fd00e97](https://github.com/yuki-nemurenai/magic-releaser/commit/fd00e9775798b349551f21b5955778338ca5cfff))
+
 ## 1.0.2 - 2026-09-30
 
 Full changelog: https://github.com/yuki-nemurenai/magic-releaser/compare/v1.0.1...v1.0.2
