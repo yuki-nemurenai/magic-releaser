@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.2.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.1.0...v1.2.0) (2026-10-01)
+
+### Features
+
+- Publish v{major} branches ([4697560](https://github.com/yuki-nemurenai/magic-releaser/commit/4697560d008ce46b7222a8fa2499989afa24b7c6))
+
 ## [1.1.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.0.2...v1.1.0) (2026-10-01)
 
 ### Features
