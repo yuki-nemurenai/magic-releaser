@@ -75,18 +75,35 @@ outputs:
 runs:
   using: composite
   steps:
-    # A version tag of the action downloads the matching release binary and
-    # verifies its checksum. Any other ref (a branch, a commit) is built from
-    # the action source, which needs Go.
+    # A release tag (v1.2.3) downloads that release's binary and verifies its
+    # checksum. A major or minor version branch (v1, v1.2) downloads the
+    # release its commit is tagged with, which is the latest release of that
+    # line. Any other ref (main, a commit) is built from the action source,
+    # which needs Go.
     - name: Select the installation
       id: install
       shell: bash
       env:
         ACTION_REF: ${{ github.action_ref }}
+        ACTION_REPOSITORY: ${{ github.action_repository }}
+        GH_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
+        tag=""
         if [[ "$ACTION_REF" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          tag="$ACTION_REF"
+        elif [[ "$ACTION_REF" =~ ^v[0-9]+(\.[0-9]+)?$ ]]; then
+          sha=$(gh api "repos/$ACTION_REPOSITORY/commits/$ACTION_REF" --jq .sha)
+          tag=$(gh api "repos/$ACTION_REPOSITORY/tags?per_page=100" \
+            --jq ".[] | select(.commit.sha == \"$sha\") | .name" \
+            | grep -E "^${ACTION_REF//./\\.}\.[0-9.]+$" | head -n 1 || true)
+          if [[ -z "$tag" ]]; then
+            echo "::notice::$ACTION_REF is not at a release commit, building magic-releaser from source"
+          fi
+        fi
+        if [[ -n "$tag" ]]; then
           echo "mode=download" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
         else
           echo "mode=build" >> "$GITHUB_OUTPUT"
         fi
@@ -95,7 +112,7 @@ runs:
       if: steps.install.outputs.mode == 'download'
       shell: bash
       env:
-        ACTION_REF: ${{ github.action_ref }}
+        RELEASE_TAG: ${{ steps.install.outputs.tag }}
         ACTION_REPOSITORY: ${{ github.action_repository }}
         GH_TOKEN: ${{ github.token }}
       run: |
@@ -114,7 +131,7 @@ runs:
         asset="magic-releaser_${os}_${arch}.${ext}"
         dir="$RUNNER_TEMP/magic-releaser-dist"
         mkdir -p "$dir"
-        gh release download "$ACTION_REF" --repo "$ACTION_REPOSITORY" \
+        gh release download "$RELEASE_TAG" --repo "$ACTION_REPOSITORY" \
           --pattern "$asset" --pattern checksums.txt --dir "$dir" --clobber
         (cd "$dir" && grep " ${asset}\$" checksums.txt | sha256sum --check --strict)
         if [[ "$ext" == zip ]]; then

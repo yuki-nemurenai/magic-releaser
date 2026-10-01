@@ -57,3 +57,13 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Moves the major version branch (v1, v2, ...) to the release, so that
+      # `uses: yuki-nemurenai/magic-releaser@v1` follows the latest 1.x. It runs
+      # last: the release it points at already carries the binaries the action
+      # downloads.
+      - name: Update the major version branch
+        if: steps.release.outputs.released == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: git push origin "HEAD:refs/heads/v${VERSION%%.*}"

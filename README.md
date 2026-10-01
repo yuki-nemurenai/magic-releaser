@@ -157,7 +157,7 @@ never moves backwards, even if the newest tag carries a future date. A daily lay
 | Binary | Download an archive for Linux, macOS or Windows from [Releases](https://github.com/yuki-nemurenai/magic-releaser/releases) |
 | Container image | `docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/yuki-nemurenai/magic-releaser:1 release --dry-run` |
 | Go | `go install github.com/yuki-nemurenai/magic-releaser/cmd/magic-releaser@latest` |
-| GitHub Actions | [`uses: yuki-nemurenai/magic-releaser@v1.0.1`](#github-actions) |
+| GitHub Actions | [`uses: yuki-nemurenai/magic-releaser@v1`](#github-actions) |
 | GitLab CI | [include the template](#gitlab-ci) |
 
 Every release publishes `checksums.txt` next to the archives. The container image is based on
@@ -226,7 +226,7 @@ jobs:
           fetch-depth: 0 # the full history and all tags are required
 
       - id: release
-        uses: yuki-nemurenai/magic-releaser@v1.0.1
+        uses: yuki-nemurenai/magic-releaser@v1
         with:
           versioning: calver
           timezone: Europe/Moscow
@@ -235,9 +235,14 @@ jobs:
         run: echo "Released ${{ steps.release.outputs.tag }}: ${{ steps.release.outputs.release-url }}"
 ```
 
-Pin the action to a release tag (`@v1.0.1`): it downloads the matching prebuilt binary and
-verifies its checksum. Any other reference (`@main`, a commit SHA) builds the binary from source
-with `actions/setup-go`.
+| Reference | Follows | Binary |
+|-----------|---------|--------|
+| `@v1` | the latest `1.x.y` release: the `v1` branch moves with every release | downloaded, checksum verified |
+| `@v1.1.0` | exactly this release | downloaded, checksum verified |
+| `@main`, a commit SHA | unreleased code | built from source with `actions/setup-go` |
+
+`@v1` picks up fixes and features automatically and never a breaking change. Pin an exact
+release, or a commit SHA, when every update has to be reviewed.
 
 ### Inputs
 
