@@ -94,11 +94,14 @@ type Config struct {
 	// are told apart: only the latter disables the changelog.
 	Changelog *string `yaml:"changelog"`
 	// ReleaseCommitMessage accepts the {{tag}} and {{version}} placeholders.
-	ReleaseCommitMessage string          `yaml:"releaseCommitMessage"`
-	Manifest             string          `yaml:"manifest"`
-	Remote               string          `yaml:"remote"`
-	Notes                NotesConfig     `yaml:"notes"`
-	Packages             []PackageConfig `yaml:"packages"`
+	ReleaseCommitMessage string `yaml:"releaseCommitMessage"`
+	// ReleaseName is the title of the forge release, with the same
+	// placeholders.
+	ReleaseName string          `yaml:"releaseName"`
+	Manifest    string          `yaml:"manifest"`
+	Remote      string          `yaml:"remote"`
+	Notes       NotesConfig     `yaml:"notes"`
+	Packages    []PackageConfig `yaml:"packages"`
 }
 
 // NotesConfig configures the release notes layout.
@@ -109,6 +112,8 @@ type NotesConfig struct {
 	Categories []Category `yaml:"categories"`
 	// ShowContributors appends the list of commit authors.
 	ShowContributors bool `yaml:"showContributors"`
+	// Style selects the heading layout, by default the one of the forge.
+	Style NotesStyle `yaml:"style"`
 }
 
 // PackageConfig describes one package of the repository. The whole release

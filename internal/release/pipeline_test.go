@@ -74,7 +74,7 @@ packages:
 	if err != nil {
 		t.Fatalf("ReadFile(CHANGELOG.md) error = %v", err)
 	}
-	if !strings.Contains(string(changelog), "## 2026.08.0 - 2026-08-11") {
+	if !strings.Contains(string(changelog), "## [2026.08.0] - 2026-08-11") {
 		t.Fatalf("CHANGELOG.md was not updated:\n%s", string(changelog))
 	}
 }

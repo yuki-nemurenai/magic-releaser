@@ -27,6 +27,34 @@ const (
 	PresetNone                Preset = "none"
 )
 
+// NotesStyle selects how the heading of a release reads. Each forge has its
+// own convention, so the default follows the forge.
+type NotesStyle string
+
+const (
+	// NotesStyleAuto picks the convention of the forge.
+	NotesStyleAuto NotesStyle = "auto"
+	// NotesStyleConventionalChangelog is the semantic-release heading on
+	// GitHub: "## [1.2.0](compare) (2026-10-01)", titled by the tag.
+	NotesStyleConventionalChangelog NotesStyle = "conventional-changelog"
+	// NotesStyleKeepAChangelog is the Keep a Changelog heading of git-cliff:
+	// "## [1.2.0] - 2026-10-01" with a compare link below, titled
+	// "Release 1.2.0".
+	NotesStyleKeepAChangelog NotesStyle = "keep-a-changelog"
+)
+
+// ResolveNotesStyle turns auto into the convention of the provider: the
+// semantic-release layout on GitHub, Keep a Changelog elsewhere.
+func ResolveNotesStyle(style NotesStyle, provider repository.Provider) NotesStyle {
+	if style != "" && style != NotesStyleAuto {
+		return style
+	}
+	if provider == repository.ProviderGitHub {
+		return NotesStyleConventionalChangelog
+	}
+	return NotesStyleKeepAChangelog
+}
+
 // DefaultCategories returns the section layout of a preset. The group titles
 // follow semantic-release so existing changelogs stay comparable.
 func DefaultCategories(preset Preset) []Category {
@@ -98,6 +126,8 @@ type NotesOptions struct {
 	CompareFrom      string
 	CompareTo        string
 	ShowContributors bool
+	// Style is the heading layout; empty means Keep a Changelog.
+	Style NotesStyle
 }
 
 // GenerateNotes renders the release notes body for a release.
@@ -106,11 +136,7 @@ type NotesOptions struct {
 // they simply carry plain hashes instead of links.
 func GenerateNotes(options NotesOptions) string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "## %s - %s\n\n", options.Version, options.Date.Format("2006-01-02"))
-
-	if compare := options.Repository.CompareURL(options.CompareFrom, options.CompareTo); compare != "" {
-		fmt.Fprintf(&builder, "Full changelog: %s\n\n", compare)
-	}
+	writeHeading(&builder, options)
 
 	categories := options.Categories
 	if len(categories) == 0 {
@@ -150,6 +176,27 @@ func withBreakingCategory(categories []Category) []Category {
 	result := make([]Category, 0, len(categories)+1)
 	result = append(result, Category{Title: DefaultBreakingTitle, Breaking: true})
 	return append(result, categories...)
+}
+
+// writeHeading renders the release heading in the requested style. The same
+// text heads CHANGELOG.md, so both read like the rest of the ecosystem.
+func writeHeading(builder *strings.Builder, options NotesOptions) {
+	date := options.Date.Format("2006-01-02")
+	compare := options.Repository.CompareURL(options.CompareFrom, options.CompareTo)
+	if options.Style == NotesStyleConventionalChangelog {
+		// semantic-release links the version itself to the comparison, and the
+		// first release has nothing to compare against.
+		if compare != "" && options.CompareFrom != "" {
+			fmt.Fprintf(builder, "## [%s](%s) (%s)\n\n", options.Version, compare, date)
+			return
+		}
+		fmt.Fprintf(builder, "## %s (%s)\n\n", options.Version, date)
+		return
+	}
+	fmt.Fprintf(builder, "## [%s] - %s\n\n", options.Version, date)
+	if compare != "" {
+		fmt.Fprintf(builder, "Full changelog: %s\n\n", compare)
+	}
 }
 
 // groupCommits assigns every commit to the first matching category.

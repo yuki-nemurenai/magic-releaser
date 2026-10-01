@@ -128,7 +128,7 @@ Modes:
 	command.Flags().StringVar(&options.Provider, "provider", "", "release provider: github or gitlab (default: detected from the remote)")
 	command.Flags().StringVar(&options.Token, "token", "", "API token (default: taken from the provider token environment variables)")
 	command.Flags().StringVar(&options.APIURL, "api-url", "", "forge API base URL (default: detected from the remote and the CI environment)")
-	command.Flags().StringVar(&options.ReleaseName, "release-name", "", "release title (default: the tag name)")
+	command.Flags().StringVar(&options.ReleaseName, "release-name", "", "release title with {{version}} and {{tag}} placeholders (default: the tag on GitHub, Release {{version}} elsewhere)")
 	command.Flags().BoolVar(&options.Draft, "draft", false, "create the release as a draft")
 	command.Flags().BoolVar(&options.Prerelease, "prerelease", false, "mark the release as a prerelease")
 	command.Flags().StringVar(&options.RepoDir, "repo", ".", "path to git repository")

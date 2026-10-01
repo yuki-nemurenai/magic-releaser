@@ -186,7 +186,7 @@ Alpine and includes `git` for CI scripts.
    Next version: 2026.09.1
    Tag: 2026.09.1
 
-   ## 2026.09.1 - 2026-09-30
+   ## [2026.09.1] - 2026-09-30
 
    ### Features
 
@@ -340,6 +340,7 @@ mode: direct                  # direct | pull-request
 
 notes:
   preset: conventionalcommits # conventionalcommits | angular | none
+  style: auto                 # auto | conventional-changelog | keep-a-changelog
   showContributors: true
 
 packages:
@@ -359,6 +360,7 @@ packages:
 | `tagFormat` | `v{{version}}` | Tag name; must contain `{{version}}` |
 | `changelog` | `CHANGELOG.md` | File the notes are prepended to; `""` disables it |
 | `releaseCommitMessage` | `chore(release): {{tag}}` | Supports `{{tag}}` and `{{version}}` |
+| `releaseName` | by `notes.style` | Title of the GitHub or GitLab release; supports `{{tag}}` and `{{version}}` |
 | `remote` | `origin` | Remote used for detection, links and pushing |
 | `mode` | `direct` | `pull-request` updates the files and prints a PR title and body, without committing or tagging |
 | `manifest` | | JSON file receiving the version of every package |
@@ -424,12 +426,21 @@ A breaking change always goes to the breaking section: when your layout defines 
 `⚠ BREAKING CHANGES` section is added in front, so the change behind a major release is never
 lost. To style that heading, add your own section with `breaking: true`.
 
-A rendered release:
+### Release title and heading
+
+The title and the heading of a release follow the convention of the forge. `notes.style` picks
+one explicitly, and `releaseName` overrides the title:
+
+| `notes.style` | Default for | Title | Heading |
+|---------------|-------------|-------|---------|
+| `conventional-changelog` | GitHub | the tag: `v2.0.0` | `## [2.0.0](<compare link>) (2026-09-30)`, as semantic-release |
+| `keep-a-changelog` | GitLab, other remotes | `Release 2.0.0` | `## [2.0.0] - 2026-09-30` and a compare link below, as git-cliff |
+
+`auto`, the default, picks by the forge. The same heading starts the entry in `CHANGELOG.md`.
+A rendered GitHub release:
 
 ```markdown
-## 2.0.0 - 2026-09-30
-
-Full changelog: https://github.com/acme/app/compare/v1.4.0...v2.0.0
+## [2.0.0](https://github.com/acme/app/compare/v1.4.0...v2.0.0) (2026-09-30)
 
 ### ⚠ BREAKING CHANGES
 
@@ -526,7 +537,7 @@ magic-releaser version
 | `--provider` | `github` or `gitlab`, when it cannot be detected |
 | `--api-url` | Forge API base URL, when it cannot be detected |
 | `--token` | API token; defaults to the environment |
-| `--release-name` | Release title; defaults to the tag |
+| `--release-name` | Release title template; defaults to the [convention of the forge](#release-title-and-heading) |
 | `--draft`, `--prerelease` | Passed through to the forge |
 | `--output-file` | Append the result as `KEY=value` lines, e.g. `$GITHUB_OUTPUT` |
 | `--include-merge-commits` | Analyze merge commits too |

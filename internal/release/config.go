@@ -56,6 +56,9 @@ func MergeConfig(options Options, config Config) Options {
 		options.Changelog = *config.Changelog
 		options.ChangelogSet = true
 	}
+	if options.ReleaseName == "" {
+		options.ReleaseName = config.ReleaseName
+	}
 	if options.ReleaseCommitMessage == "" {
 		options.ReleaseCommitMessage = config.ReleaseCommitMessage
 	}

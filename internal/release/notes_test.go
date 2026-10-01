@@ -24,7 +24,7 @@ func TestGenerateNotesGroupsCommits(t *testing.T) {
 	})
 
 	for _, want := range []string{
-		"## 2026.08.0 - 2026-08-11",
+		"## [2026.08.0] - 2026-08-11",
 		"### ⚠ BREAKING CHANGES",
 		"change release API",
 		"### Features",

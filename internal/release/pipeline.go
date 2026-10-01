@@ -89,6 +89,11 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	provider := repo.Provider
+	if options.Provider != "" {
+		provider = repository.Provider(options.Provider)
+	}
+	options.Notes.Style = ResolveNotesStyle(options.Notes.Style, provider)
 	notes, err := buildNotes(options, repo, nextVersion, tagName, lastTag, commits)
 	if err != nil {
 		return Result{}, err
@@ -113,6 +118,9 @@ func Run(ctx context.Context, options Options) (Result, error) {
 			boundary.HighestVersion)
 	}
 	fmt.Fprintf(options.Output, "Next version: %s\n", nextVersion)
+	if options.Publish {
+		fmt.Fprintf(options.Output, "Release name: %s\n", releaseName(options.ReleaseName, options.Notes.Style, tagName, nextVersion))
+	}
 	fmt.Fprintf(options.Output, "Tag: %s\n\n%s", tagName, notes)
 
 	// The target branch is resolved before anything is written, so a CI job
@@ -185,12 +193,35 @@ func Run(ctx context.Context, options Options) (Result, error) {
 // same commit as well, which would silently skip the build of the release.
 const DefaultReleaseCommitMessage = "chore(release): {{tag}}"
 
+// The default title of the forge release follows the notes style: the bare
+// tag on GitHub, as semantic-release does, and "Release <version>" in the Keep
+// a Changelog layout.
+const (
+	DefaultReleaseName                      = "Release {{version}}"
+	DefaultConventionalChangelogReleaseName = "{{tag}}"
+)
+
 func releaseCommitMessage(template, tagName, version string) string {
 	if template == "" {
 		template = DefaultReleaseCommitMessage
 	}
-	message := strings.ReplaceAll(template, "{{tag}}", tagName)
-	return strings.ReplaceAll(message, "{{version}}", version)
+	return expandTemplate(template, tagName, version)
+}
+
+func releaseName(template string, style NotesStyle, tagName, version string) string {
+	switch {
+	case template != "":
+	case style == NotesStyleConventionalChangelog:
+		template = DefaultConventionalChangelogReleaseName
+	default:
+		template = DefaultReleaseName
+	}
+	return expandTemplate(template, tagName, version)
+}
+
+// expandTemplate substitutes the {{tag}} and {{version}} placeholders.
+func expandTemplate(template, tagName, version string) string {
+	return strings.ReplaceAll(strings.ReplaceAll(template, "{{tag}}", tagName), "{{version}}", version)
 }
 
 // resolvePushBranch returns the branch that receives the release commit, or an
@@ -270,7 +301,7 @@ func publishRelease(ctx context.Context, options Options, repo repository.Info, 
 		Repository: repo,
 		TagName:    tagName,
 		Version:    version,
-		Name:       options.ReleaseName,
+		Name:       releaseName(options.ReleaseName, options.Notes.Style, tagName, version),
 		Notes:      notes,
 		Target:     result.ReleaseCommit,
 		Draft:      options.Draft,
@@ -314,6 +345,7 @@ func buildNotes(options Options, repo repository.Info, version, tagName string, 
 		CompareFrom:      lastTag.Name,
 		CompareTo:        tagName,
 		ShowContributors: options.Notes.ShowContributors,
+		Style:            options.Notes.Style,
 	}), nil
 }
 
@@ -446,6 +478,11 @@ func validateOptions(options Options) error {
 	case VersioningSemVer, VersioningCalVer:
 	default:
 		return fmt.Errorf("unsupported versioning strategy %q", options.Versioning)
+	}
+	switch options.Notes.Style {
+	case "", NotesStyleAuto, NotesStyleConventionalChangelog, NotesStyleKeepAChangelog:
+	default:
+		return fmt.Errorf("unsupported notes style %q: use auto, conventional-changelog or keep-a-changelog", options.Notes.Style)
 	}
 	if _, _, ok := tagFormatParts(options.TagFormat); !ok {
 		return fmt.Errorf("tag format must contain {{version}}")

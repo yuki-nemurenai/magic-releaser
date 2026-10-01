@@ -83,12 +83,16 @@ func TestReadConfigAcceptsSupportedKeys(t *testing.T) {
 	path := filepath.Join(dir, ".magic-releaser.yaml")
 	content := `versioning: calver
 calverFormat: YYYY.MM.DD
+timezone: Asia/Tomsk
 tagFormat: "v{{version}}"
 changelog: CHANGELOG.md
+releaseCommitMessage: "chore(release): {{tag}}"
+releaseName: "Release {{version}}"
 manifest: versions.json
 remote: origin
 notes:
   preset: conventionalcommits
+  style: keep-a-changelog
   showContributors: true
   categories:
     - title: Features
@@ -100,8 +104,8 @@ packages:
     path: .
     changelog: CHANGELOG.md
     files:
-      - type: go-mod
-        path: go.mod
+      - type: package-json
+        path: package.json
 `
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatalf("WriteFile() error = %v", err)
@@ -112,6 +116,13 @@ packages:
 	}
 	if config.CalVerFormat != "YYYY.MM.DD" {
 		t.Fatalf("CalVerFormat = %q", config.CalVerFormat)
+	}
+	if config.Timezone != "Asia/Tomsk" || config.ReleaseName != "Release {{version}}" ||
+		config.ReleaseCommitMessage != "chore(release): {{tag}}" {
+		t.Fatalf("config = %+v", config)
+	}
+	if config.Notes.Style != NotesStyleKeepAChangelog {
+		t.Fatalf("Notes.Style = %q", config.Notes.Style)
 	}
 	if !config.Notes.ShowContributors {
 		t.Fatal("ShowContributors = false, want true")
@@ -125,8 +136,8 @@ packages:
 }
 
 // A config key that is present but empty has to disable the changelog, exactly
-// like the --changelog "" flag does. The test123 integration depends on it,
-// because that repository keeps CHANGELOG.md under git-cliff.
+// like the --changelog "" flag does, for repositories that publish the notes
+// only as forge releases.
 func TestConfigCanDisableTheChangelog(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".magic-releaser.yaml")

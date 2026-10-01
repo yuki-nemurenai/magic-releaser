@@ -31,6 +31,11 @@ changelog: CHANGELOG.md
 # message of the release commit; {{tag}} and {{version}} are substituted
 releaseCommitMessage: "chore(release): {{tag}}"
 
+# title of the GitHub or GitLab release, same placeholders; by default the
+# tag in the conventional-changelog style and "Release {{version}}" in the
+# keep-a-changelog style
+releaseName: "Release {{version}}"
+
 # JSON file that receives the version of every package
 manifest: .magic-releaser-manifest.json
 
@@ -39,6 +44,8 @@ remote: origin
 
 notes:
   preset: conventionalcommits
+  # auto | conventional-changelog | keep-a-changelog; auto follows the forge
+  style: auto
   showContributors: true
   # categories replaces the preset entirely
   # categories:
@@ -107,6 +114,20 @@ Rules:
   it in `package.json` and `Chart.yaml`; use `YYYY.MM.MICRO` or `M` there.
 
 ## Release notes
+
+The heading of the notes follows `notes.style`, by default the convention of
+the forge:
+
+- `conventional-changelog`, the default on GitHub, renders the heading of
+  semantic-release, `## [<version>](<compare link>) (<date>)`, and titles the
+  release with the tag. The first release has no link.
+- `keep-a-changelog`, the default on GitLab and on remotes that are not a
+  forge, renders the [Keep a Changelog](https://keepachangelog.com/) heading
+  of git-cliff, `## [<version>] - <date>`, followed by a compare link, and
+  titles the release `Release <version>`.
+
+`releaseName` overrides the title in both styles. The same text is prepended to
+the changelog file.
 
 Categories map Conventional Commits types to changelog sections. A commit lands
 in the first matching category, and a breaking commit only ever appears in the

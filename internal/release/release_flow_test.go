@@ -3,7 +3,10 @@ package release
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +17,7 @@ import (
 	gitconfig "github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/yuki-nemurenai/magic-releaser/internal/pusher"
+	"github.com/yuki-nemurenai/magic-releaser/internal/repository"
 )
 
 var releaseNow = time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC)
@@ -896,5 +900,119 @@ func TestRunSignsWithTheGlobalGitIdentity(t *testing.T) {
 	}
 	if commit.Author.Name != "Global CI" || commit.Author.Email != "ci@example.invalid" {
 		t.Fatalf("author = %s <%s>, want the global identity", commit.Author.Name, commit.Author.Email)
+	}
+}
+
+// Each forge gets its own convention: the semantic-release layout on GitHub,
+// titled by the tag, and the Keep a Changelog layout on GitLab, titled
+// "Release <version>". A configured style or title wins over the forge.
+func TestRunFollowsTheReleaseConventionOfTheForge(t *testing.T) {
+	tests := []struct {
+		name        string
+		remote      string
+		style       NotesStyle
+		template    string
+		wantTitle   string
+		wantHeading string
+	}{
+		{"github", "git@github.com:octo/demo.git", "", "",
+			"v2026.08.1", "## [2026.08.1](https://github.com/octo/demo/compare/v2026.08.0...v2026.08.1) (2026-08-11)\n"},
+		{"gitlab", "git@gitlab.com:group/demo.git", "", "",
+			"Release 2026.08.1", "## [2026.08.1] - 2026-08-11\n\nFull changelog: https://gitlab.com/group/demo/-/compare/v2026.08.0...v2026.08.1\n"},
+		{"style from the config", "git@github.com:octo/demo.git", NotesStyleKeepAChangelog, "",
+			"Release 2026.08.1", "## [2026.08.1] - 2026-08-11\n"},
+		{"title template", "git@gitlab.com:group/demo.git", "", "{{tag}} ({{version}})",
+			"v2026.08.1 (2026.08.1)", "## [2026.08.1] - 2026-08-11\n"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var title string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/releases"):
+					_, _ = w.Write([]byte(`[]`))
+				case r.Method == http.MethodGet:
+					w.WriteHeader(http.StatusNotFound)
+				case r.Method == http.MethodPost:
+					var body struct {
+						Name string `json:"name"`
+					}
+					_ = json.NewDecoder(r.Body).Decode(&body)
+					title = body.Name
+					w.WriteHeader(http.StatusCreated)
+					_, _ = w.Write([]byte(`{"id":1}`))
+				}
+			}))
+			t.Cleanup(server.Close)
+
+			dir, worktree := newTestRepo(t)
+			commitFile(t, worktree, dir, "one.txt", "feat: first")
+			if err := (Git{Dir: dir}).CreateAnnotatedTagAt(context.Background(), plumbingHash(t, headHash(t, dir)), "v2026.08.0", "first"); err != nil {
+				t.Fatalf("CreateAnnotatedTagAt() error = %v", err)
+			}
+			commitFile(t, worktree, dir, "two.txt", "fix: second")
+			addPlainRemote(t, dir, test.remote)
+			var output bytes.Buffer
+			result, err := Run(context.Background(), Options{
+				RepoDir:      dir,
+				Versioning:   VersioningCalVer,
+				Now:          releaseNow,
+				CreateTag:    true,
+				CreateCommit: true,
+				Publish:      true,
+				Token:        "t",
+				APIURL:       server.URL,
+				ReleaseName:  test.template,
+				Notes:        NotesConfig{Style: test.style},
+				Output:       &output,
+			})
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			if title != test.wantTitle {
+				t.Fatalf("release title = %q, want %q", title, test.wantTitle)
+			}
+			if !strings.HasPrefix(result.Notes, test.wantHeading) {
+				t.Fatalf("notes start with\n%s\nwant\n%s", result.Notes, test.wantHeading)
+			}
+			if !strings.Contains(output.String(), "Release name: "+test.wantTitle) {
+				t.Fatalf("output does not show the release name:\n%s", output.String())
+			}
+		})
+	}
+}
+
+// The first release has nothing to compare against, so the GitHub heading
+// carries no link, as semantic-release renders it.
+func TestConventionalChangelogHeadingOfTheFirstRelease(t *testing.T) {
+	notes := GenerateNotes(NotesOptions{
+		Version:    "1.0.0",
+		Date:       releaseNow,
+		Style:      NotesStyleConventionalChangelog,
+		CompareTo:  "v1.0.0",
+		Repository: repository.Info{Provider: repository.ProviderGitHub, Host: "github.com", Slug: "o/d", WebURL: "https://github.com/o/d"},
+		Commits:    []Commit{ParseCommit("a1", "feat: first")},
+	})
+	if !strings.HasPrefix(notes, "## 1.0.0 (2026-08-11)\n\n### Features") {
+		t.Fatalf("notes =\n%s", notes)
+	}
+}
+
+func TestRunRejectsAnUnknownNotesStyle(t *testing.T) {
+	dir, worktree := newTestRepo(t)
+	commitFile(t, worktree, dir, "one.txt", "feat: something new")
+	_, err := Run(context.Background(), Options{RepoDir: dir, DryRun: true, Notes: NotesConfig{Style: "fancy"}})
+	if err == nil || !strings.Contains(err.Error(), "fancy") {
+		t.Fatalf("Run() error = %v, want an unknown style error", err)
+	}
+}
+
+func TestConfigSetsTheReleaseName(t *testing.T) {
+	options := MergeConfig(Options{}, Config{ReleaseName: "Build {{version}}"})
+	if options.ReleaseName != "Build {{version}}" {
+		t.Fatalf("ReleaseName = %q", options.ReleaseName)
+	}
+	if options := MergeConfig(Options{ReleaseName: "flag"}, Config{ReleaseName: "config"}); options.ReleaseName != "flag" {
+		t.Fatalf("ReleaseName = %q, want the flag to win", options.ReleaseName)
 	}
 }
