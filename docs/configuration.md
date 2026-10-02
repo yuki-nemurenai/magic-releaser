@@ -334,6 +334,11 @@ the whole history. `requirePreviousRelease: true` (or
 `--require-previous-release`) turns that into an error with the command that
 tags a baseline; `--force-first-release` still overrides it.
 
+To move an existing repository to a new tag layout (for example from `2026.73`
+to `YYYY.0M.MICRO`), tag the current release commit once in the new format,
+`git tag -a 2026.09.0 -m "Release baseline" && git push origin 2026.09.0`; the
+next release continues from it.
+
 ## Commit identity
 
 The release commit and the tag are signed with `GIT_AUTHOR_NAME` and
@@ -344,3 +349,58 @@ CI jobs set the two variables rather than run `git config`.
 `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` set a different committer, which
 also signs the tag. Unlike git, a committer left unset follows the author
 variables rather than the git config: a release has one identity.
+
+## Command line
+
+```text
+magic-releaser release [flags]
+magic-releaser version
+```
+
+| Flag | Description |
+| --- | --- |
+| `--dry-run` | Print the next release and its notes without writing anything |
+| `--versioning` | `semver` or `calver` |
+| `--calver-format` | CalVer layout |
+| `--timezone` | IANA timezone of the CalVer date |
+| `--tag-format` | Tag format with `{{version}}` |
+| `--changelog` | Changelog path; `""` disables it |
+| `--config` | Config file path |
+| `--mode` | `direct`, or `pull-request` to update the files without committing or tagging |
+| `--manifest` | JSON file receiving the package versions |
+| `--no-commit` | Leave the changed files uncommitted |
+| `--no-tag` | Do not create a tag |
+| `--push` | Push the release commit and the tag in one atomic push |
+| `--push-branch-name` | Branch receiving the release commit; required on a detached HEAD |
+| `--push-tag-only` | With `--push`, push only the tag |
+| `--publish` | Create the GitHub or GitLab release |
+| `--provider` | `github` or `gitlab`, when it cannot be detected |
+| `--api-url` | Forge API base URL, when it cannot be detected |
+| `--token` | API token; defaults to the environment |
+| `--release-name` | Release title template |
+| `--draft`, `--prerelease` | Passed through to the forge |
+| `--output-file` | Append the result as `KEY=value` lines, e.g. `$GITHUB_OUTPUT` |
+| `--include-merge-commits` | Analyze merge commits too |
+| `--require-previous-release` | Fail instead of making a first release when no release tag is reachable |
+| `--force-first-release` | Make a first release anyway |
+| `--repo` | Repository path; defaults to the current directory |
+
+## Troubleshooting
+
+| Message | Cause and fix |
+| --- | --- |
+| `the repository is a shallow clone` | Fetch the full history: `fetch-depth: 0` on GitHub Actions, `GIT_DEPTH: 0` on GitLab CI |
+| `HEAD is detached` | Pass `--push-branch-name`; the action and the GitLab template do |
+| `found N version-like tag(s) ... that match neither` | The tags do not match the configuration; see [Strategy switches](#strategy-switches) |
+| `no previous release is reachable from HEAD` | `requirePreviousRelease` is set and there is no release tag yet; tag a baseline |
+| `push ... rejected` | The token may not push to the branch, or the branch moved; nothing was published, rerun |
+| `no token found` | Set `GITHUB_TOKEN` or `GITLAB_TOKEN`, or pass `--token` |
+| `tag ... already exists` | Another run released concurrently; serialize releases with `concurrency` or `resource_group` |
+
+## Limitations
+
+- One version per repository; independently versioned packages are not supported.
+- No plugins: steps after the release are ordinary CI steps reading the outputs.
+- Outside CI, a self-hosted forge whose host name contains neither `github` nor
+  `gitlab` needs `--provider` and `--api-url`.
+- Pushing over SSH requires a running SSH agent.
