@@ -1133,3 +1133,46 @@ func TestConfigEnablesTheRequirePreviousReleaseCheck(t *testing.T) {
 		t.Fatal("the flag did not enable the check")
 	}
 }
+
+// A release has one identity: the two GIT_AUTHOR_* variables are enough, the
+// committer and the tagger follow them.
+func TestRunCommitterFollowsTheAuthorVariables(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	writeFile(t, home, ".gitconfig", "[user]\n\tname = Config User\n\temail = config@example.invalid\n")
+	clearGitIdentityEnv(t)
+	t.Setenv("GIT_AUTHOR_NAME", "GitLab CI")
+	t.Setenv("GIT_AUTHOR_EMAIL", "ci@example.invalid")
+	dir, worktree := newTestRepo(t)
+	commitFile(t, worktree, dir, "one.txt", "feat: something new")
+
+	result, err := Run(context.Background(), Options{
+		RepoDir: dir, Versioning: VersioningCalVer, Now: releaseNow, CreateCommit: true, CreateTag: true,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	repository, err := gogit.PlainOpen(dir)
+	if err != nil {
+		t.Fatalf("PlainOpen() error = %v", err)
+	}
+	commit, err := repository.CommitObject(plumbingHash(t, result.ReleaseCommit))
+	if err != nil {
+		t.Fatalf("CommitObject() error = %v", err)
+	}
+	if commit.Committer.Name != "GitLab CI" || commit.Committer.Email != "ci@example.invalid" {
+		t.Fatalf("committer = %s <%s>, want the author variables", commit.Committer.Name, commit.Committer.Email)
+	}
+	ref, err := repository.Tag(result.TagName)
+	if err != nil {
+		t.Fatalf("Tag() error = %v", err)
+	}
+	tag, err := repository.TagObject(ref.Hash())
+	if err != nil {
+		t.Fatalf("TagObject() error = %v", err)
+	}
+	if tag.Tagger.Name != "GitLab CI" || tag.Tagger.Email != "ci@example.invalid" {
+		t.Fatalf("tagger = %s <%s>, want the author variables", tag.Tagger.Name, tag.Tagger.Email)
+	}
+}

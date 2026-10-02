@@ -276,10 +276,13 @@ func (git Git) createAnnotatedTagAt(ctx context.Context, repository *gogit.Repos
 	return nil
 }
 
-// identity reads the author and the committer the way git does: the
-// GIT_AUTHOR_* and GIT_COMMITTER_* environment variables first, then user.name
-// and user.email from the repository, global and system config. The variables
-// let a CI job set the identity without a git executable to run git config.
+// identity reads the author and the committer like git does: the GIT_AUTHOR_*
+// and GIT_COMMITTER_* environment variables first, then user.name and
+// user.email from the repository, global and system config. The variables let
+// a CI job set the identity without a git executable to run git config.
+//
+// Unlike git, a committer left unset follows GIT_AUTHOR_*: a release has one
+// identity, and a CI job sets it with two variables rather than four.
 func (git Git) identity(repository *gogit.Repository) (author, committer *object.Signature) {
 	name := "magic-releaser"
 	email := "magic-releaser@example.invalid"
@@ -298,8 +301,8 @@ func (git Git) identity(repository *gogit.Repository) (author, committer *object
 		When:  now,
 	}
 	committer = &object.Signature{
-		Name:  envOr("GIT_COMMITTER_NAME", name),
-		Email: envOr("GIT_COMMITTER_EMAIL", email),
+		Name:  envOr("GIT_COMMITTER_NAME", author.Name),
+		Email: envOr("GIT_COMMITTER_EMAIL", author.Email),
 		When:  now,
 	}
 	return author, committer

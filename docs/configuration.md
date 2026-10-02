@@ -335,8 +335,11 @@ tags a baseline; `--force-first-release` still overrides it.
 
 ## Commit identity
 
-The release commit and the tag are signed like git does: `GIT_AUTHOR_NAME`,
-`GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` first, then
-`user.name` and `user.email` from the repository, global and system git config.
-The tag carries the committer. The container image has no git, so CI jobs set
-the variables rather than run `git config`.
+The release commit and the tag are signed with `GIT_AUTHOR_NAME` and
+`GIT_AUTHOR_EMAIL`, or, without them, with `user.name` and `user.email` from the
+repository, global and system git config. The container image has no git, so
+CI jobs set the two variables rather than run `git config`.
+
+`GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` set a different committer, which
+also signs the tag. Unlike git, a committer left unset follows the author
+variables rather than the git config: a release has one identity.

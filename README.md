@@ -162,9 +162,9 @@ never moves backwards, even if the newest tag carries a future date. A daily lay
 
 Every release publishes `checksums.txt` next to the archives. The container image is Alpine with
 the binary and nothing else: no `git` is needed, and the shell is there for CI job scripts. Set the
-identity of the release commit with `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`
-and `GIT_COMMITTER_EMAIL`, as for git itself; without them `user.name` and `user.email` of the git
-config apply.
+identity of the release commit and tag with `GIT_AUTHOR_NAME` and `GIT_AUTHOR_EMAIL`; without
+them `user.name` and `user.email` of the git config apply. `GIT_COMMITTER_NAME` and
+`GIT_COMMITTER_EMAIL` set a different committer, which otherwise follows the author.
 
 ## Quick start
 

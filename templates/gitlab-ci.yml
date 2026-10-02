@@ -44,11 +44,9 @@
     GIT_DEPTH: "0"
     GIT_STRATEGY: clone
     # Identity of the release commit and tag; the image has no git to run
-    # git config with.
+    # git config with. The committer follows the author.
     GIT_AUTHOR_NAME: "GitLab CI"
     GIT_AUTHOR_EMAIL: "gitlab-ci@${CI_SERVER_HOST}"
-    GIT_COMMITTER_NAME: "GitLab CI"
-    GIT_COMMITTER_EMAIL: "gitlab-ci@${CI_SERVER_HOST}"
   artifacts:
     reports:
       # RELEASE_CREATED, RELEASE_VERSION, RELEASE_TAG, RELEASE_URL, ... for the
