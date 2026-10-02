@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.3.0...v1.4.0) (2026-10-02)
+
+### Features
+
+- let the committer follow the author variables ([08fba6e](https://github.com/yuki-nemurenai/magic-releaser/commit/08fba6ed5f12e6ccabb07a1e4f3fdb0bba19710f))
+
 ## [1.3.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.2.0...v1.3.0) (2026-10-02)
 
 ### Features
