@@ -160,8 +160,11 @@ never moves backwards, even if the newest tag carries a future date. A daily lay
 | GitHub Actions | [`uses: yuki-nemurenai/magic-releaser@v1`](#github-actions) |
 | GitLab CI | [include the template](#gitlab-ci) |
 
-Every release publishes `checksums.txt` next to the archives. The container image is based on
-Alpine and includes `git` for CI scripts.
+Every release publishes `checksums.txt` next to the archives. The container image is Alpine with
+the binary and nothing else: no `git` is needed, and the shell is there for CI job scripts. Set the
+identity of the release commit with `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`
+and `GIT_COMMITTER_EMAIL`, as for git itself; without them `user.name` and `user.email` of the git
+config apply.
 
 ## Quick start
 
@@ -285,7 +288,7 @@ Include the template and extend its hidden jobs:
 
 ```yaml
 include:
-  - remote: https://raw.githubusercontent.com/yuki-nemurenai/magic-releaser/v1.0.1/templates/gitlab-ci.yml
+  - remote: https://raw.githubusercontent.com/yuki-nemurenai/magic-releaser/v1/templates/gitlab-ci.yml
 
 stages: [release, build]
 
@@ -362,6 +365,7 @@ packages:
 | `versioning` | `semver` | Versioning strategy |
 | `calverFormat` | `YYYY.0M.MICRO` | CalVer layout |
 | `timezone` | `UTC` | IANA timezone the CalVer date is read in |
+| `requirePreviousRelease` | `false` | Fail instead of making a first release when no previous release tag is reachable |
 | `tagFormat` | `v{{version}}` | Tag name; must contain `{{version}}` |
 | `changelog` | `CHANGELOG.md` | File the notes are prepended to; `""` disables it |
 | `releaseCommitMessage` | `chore(release): {{tag}}` | Supports `{{tag}}` and `{{version}}` |
@@ -546,7 +550,8 @@ magic-releaser version
 | `--draft`, `--prerelease` | Passed through to the forge |
 | `--output-file` | Append the result as `KEY=value` lines, e.g. `$GITHUB_OUTPUT` |
 | `--include-merge-commits` | Analyze merge commits too |
-| `--force-first-release` | Ignore version tags that do not match the configuration |
+| `--require-previous-release` | Fail instead of making a first release when no previous release tag is reachable |
+| `--force-first-release` | Make a first release anyway: ignore version tags that do not match the configuration, and `requirePreviousRelease` |
 | `--repo` | Repository path; defaults to the current directory |
 
 **Tokens** are read from `--token`, then `GITHUB_TOKEN` or `GH_TOKEN` for GitHub, and
@@ -585,6 +590,14 @@ Create one tag in the new format on the current release commit, e.g.
 `git tag -a 2026.09.0 -m "calver" && git push origin 2026.09.0`, and the next release continues
 from it. `--force-first-release` releases the whole history instead.
 
+### Adopting it in a repository with history
+
+A repository without any release tag gets a first release whose notes list the whole history.
+To start from the current state instead, set `requirePreviousRelease: true`, tag the last
+released commit once in the configured format (`git tag -a 2026.09.0 -m "Release baseline"
+<commit> && git push -o ci.skip origin 2026.09.0`), and the next release continues from it. Until
+the tag exists, the release fails with this hint instead of publishing the history.
+
 ## Troubleshooting
 
 | Message | Cause and fix |
@@ -594,6 +607,7 @@ from it. `--force-first-release` releases the whole history instead.
 | `found N version-like tag(s) ... that match neither` | The tags do not match the configured versioning; see [Changing the version layout](#changing-the-version-layout) |
 | `push ... rejected` | The token may not push to the branch, or the branch moved; nothing was published, rerun |
 | `no token found` | Set `GITHUB_TOKEN` / `GITLAB_TOKEN`, or pass `--token` |
+| `no previous release is reachable from HEAD` | `requirePreviousRelease` is set and there is no release tag yet; see [Adopting it in a repository with history](#adopting-it-in-a-repository-with-history) |
 | `tag ... already exists` | Another run released concurrently; serialize releases with `concurrency` / `resource_group` |
 
 ## Limitations

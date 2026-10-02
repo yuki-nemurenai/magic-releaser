@@ -57,6 +57,9 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if err := checkStrategyConsistency(options, boundary); err != nil {
 		return Result{}, err
 	}
+	if err := checkPreviousRelease(options, boundary); err != nil {
+		return Result{}, err
+	}
 	lastVersion, lastTag := boundary.BoundaryVersion, boundary.Tag
 
 	commits, err := git.Commits(ctx, lastTag)
@@ -371,6 +374,29 @@ func checkStrategyConsistency(options Options, boundary releaseBoundary) error {
 		"found %d version-like tag(s) (%s) that match neither versioning %q nor tag format %q, so the last release boundary is unknown and the entire history would be released; either switch back to the previous strategy, or pass --force-first-release to accept a first release",
 		len(foreignTags), joinLimited(preview, ", "), options.Versioning, options.TagFormat,
 	)
+}
+
+// checkPreviousRelease refuses a first release when the configuration asks
+// for an earlier one. A repository adopting the tool after years of history
+// would otherwise publish all of it as the notes of its first release.
+func checkPreviousRelease(options Options, boundary releaseBoundary) error {
+	if !options.RequirePreviousRelease || options.ForceFirstRelease || boundary.BoundaryVersion != "" {
+		return nil
+	}
+	example := "1.0.0"
+	if options.Versioning == VersioningCalVer {
+		if version, err := NextCalVer(options.CalVerFormat, "", options.Now); err == nil {
+			example = version
+		}
+	}
+	tag, err := TagName(options.TagFormat, example)
+	if err != nil {
+		tag = example
+	}
+	return fmt.Errorf("no previous release is reachable from HEAD and requirePreviousRelease is set, "+
+		"so the first release would list the whole history; tag the last released commit once, e.g. "+
+		"git tag -a %s -m \"Release baseline\" <commit> && git push origin %s, or pass --force-first-release",
+		tag, tag)
 }
 
 func joinLimited(values []string, separator string) string {

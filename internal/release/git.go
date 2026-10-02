@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -197,13 +198,10 @@ func (git Git) CommitFiles(ctx context.Context, message string, paths []string) 
 			return plumbing.ZeroHash, false, fmt.Errorf("stage %s: %w", path, err)
 		}
 	}
-	signature, err := git.signature(repository)
-	if err != nil {
-		return plumbing.ZeroHash, false, err
-	}
+	author, committer := git.identity(repository)
 	hash, err := worktree.Commit(message, &gogit.CommitOptions{
-		Author:    signature,
-		Committer: signature,
+		Author:    author,
+		Committer: committer,
 	})
 	if errors.Is(err, gogit.ErrEmptyCommit) {
 		return plumbing.ZeroHash, false, nil
@@ -264,12 +262,10 @@ func (git Git) createAnnotatedTagAt(ctx context.Context, repository *gogit.Repos
 		return fmt.Errorf("look up tag %s: %w", tagName, err)
 	}
 
-	signature, err := git.signature(repository)
-	if err != nil {
-		return err
-	}
-	_, err = repository.CreateTag(tagName, target, &gogit.CreateTagOptions{
-		Tagger:  signature,
+	// git tags with the committer identity.
+	_, tagger := git.identity(repository)
+	_, err := repository.CreateTag(tagName, target, &gogit.CreateTagOptions{
+		Tagger:  tagger,
 		Message: message,
 	})
 	if err != nil {
@@ -280,10 +276,11 @@ func (git Git) createAnnotatedTagAt(ctx context.Context, repository *gogit.Repos
 	return nil
 }
 
-// signature reads the identity the way git does: the repository config over
-// the global and system ones. CI jobs set it with git config --global, which a
-// repository-only lookup would miss.
-func (git Git) signature(repository *gogit.Repository) (*object.Signature, error) {
+// identity reads the author and the committer the way git does: the
+// GIT_AUTHOR_* and GIT_COMMITTER_* environment variables first, then user.name
+// and user.email from the repository, global and system config. The variables
+// let a CI job set the identity without a git executable to run git config.
+func (git Git) identity(repository *gogit.Repository) (author, committer *object.Signature) {
 	name := "magic-releaser"
 	email := "magic-releaser@example.invalid"
 	if config, err := repository.ConfigScoped(gitconfig.SystemScope); err == nil && config != nil {
@@ -294,11 +291,25 @@ func (git Git) signature(repository *gogit.Repository) (*object.Signature, error
 			email = config.User.Email
 		}
 	}
-	return &object.Signature{
-		Name:  name,
-		Email: email,
-		When:  time.Now().UTC(),
-	}, nil
+	now := time.Now().UTC()
+	author = &object.Signature{
+		Name:  envOr("GIT_AUTHOR_NAME", name),
+		Email: envOr("GIT_AUTHOR_EMAIL", email),
+		When:  now,
+	}
+	committer = &object.Signature{
+		Name:  envOr("GIT_COMMITTER_NAME", name),
+		Email: envOr("GIT_COMMITTER_EMAIL", email),
+		When:  now,
+	}
+	return author, committer
+}
+
+func envOr(name, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		return value
+	}
+	return fallback
 }
 
 func (git Git) open() (*gogit.Repository, error) {

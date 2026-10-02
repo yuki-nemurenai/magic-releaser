@@ -119,6 +119,7 @@ Modes:
 	command.Flags().BoolVar(&options.DryRun, "dry-run", false, "print the next release and its notes without writing anything")
 	command.Flags().BoolVar(&noTag, "no-tag", false, "do not create a git tag")
 	command.Flags().BoolVar(&noCommit, "no-commit", false, "do not create the release commit, leave changed files in the working tree")
+	command.Flags().BoolVar(&options.RequirePreviousRelease, "require-previous-release", false, "fail instead of making a first release when no previous release tag is reachable")
 	command.Flags().BoolVar(&options.ForceFirstRelease, "force-first-release", false, "ignore existing version tags and treat the repository as never released")
 	command.Flags().BoolVar(&includeMergeCommits, "include-merge-commits", false, "include merge commits in the release analysis and notes")
 	command.Flags().BoolVar(&options.Publish, "publish", false, "create the release on GitHub or GitLab")

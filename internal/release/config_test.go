@@ -84,6 +84,7 @@ func TestReadConfigAcceptsSupportedKeys(t *testing.T) {
 	content := `versioning: calver
 calverFormat: YYYY.MM.DD
 timezone: Asia/Tomsk
+requirePreviousRelease: true
 tagFormat: "v{{version}}"
 changelog: CHANGELOG.md
 releaseCommitMessage: "chore(release): {{tag}}"
@@ -117,7 +118,7 @@ packages:
 	if config.CalVerFormat != "YYYY.MM.DD" {
 		t.Fatalf("CalVerFormat = %q", config.CalVerFormat)
 	}
-	if config.Timezone != "Asia/Tomsk" || config.ReleaseName != "Release {{version}}" ||
+	if !config.RequirePreviousRelease || config.Timezone != "Asia/Tomsk" || config.ReleaseName != "Release {{version}}" ||
 		config.ReleaseCommitMessage != "chore(release): {{tag}}" {
 		t.Fatalf("config = %+v", config)
 	}

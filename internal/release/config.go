@@ -44,6 +44,8 @@ func MergeConfig(options Options, config Config) Options {
 	if options.CalVerFormat == "" {
 		options.CalVerFormat = config.CalVerFormat
 	}
+	// A flag can only switch the check on, so either source enabling it wins.
+	options.RequirePreviousRelease = options.RequirePreviousRelease || config.RequirePreviousRelease
 	if options.Timezone == "" {
 		options.Timezone = config.Timezone
 	}

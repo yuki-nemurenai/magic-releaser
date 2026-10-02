@@ -882,6 +882,7 @@ func TestRunSignsWithTheGlobalGitIdentity(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", "")
+	clearGitIdentityEnv(t)
 	writeFile(t, home, ".gitconfig", "[user]\n\tname = Global CI\n\temail = ci@example.invalid\n")
 	dir, worktree := newTestRepo(t)
 	commitFile(t, worktree, dir, "one.txt", "feat: something new")
@@ -1014,5 +1015,121 @@ func TestConfigSetsTheReleaseName(t *testing.T) {
 	}
 	if options := MergeConfig(Options{ReleaseName: "flag"}, Config{ReleaseName: "config"}); options.ReleaseName != "flag" {
 		t.Fatalf("ReleaseName = %q, want the flag to win", options.ReleaseName)
+	}
+}
+
+func clearGitIdentityEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"} {
+		t.Setenv(name, "")
+	}
+}
+
+// The GIT_AUTHOR_* and GIT_COMMITTER_* variables win over the git config, as
+// in git itself: a CI image without git sets the identity through them. The
+// tag carries the committer, as git tag does.
+func TestRunTakesTheGitIdentityFromTheEnvironment(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	writeFile(t, home, ".gitconfig", "[user]\n\tname = Config User\n\temail = config@example.invalid\n")
+	t.Setenv("GIT_AUTHOR_NAME", "Release Author")
+	t.Setenv("GIT_AUTHOR_EMAIL", "author@example.invalid")
+	t.Setenv("GIT_COMMITTER_NAME", "GitLab CI")
+	t.Setenv("GIT_COMMITTER_EMAIL", "ci@example.invalid")
+	dir, worktree := newTestRepo(t)
+	commitFile(t, worktree, dir, "one.txt", "feat: something new")
+
+	result, err := Run(context.Background(), Options{
+		RepoDir: dir, Versioning: VersioningCalVer, Now: releaseNow, CreateCommit: true, CreateTag: true,
+	})
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	repository, err := gogit.PlainOpen(dir)
+	if err != nil {
+		t.Fatalf("PlainOpen() error = %v", err)
+	}
+	commit, err := repository.CommitObject(plumbingHash(t, result.ReleaseCommit))
+	if err != nil {
+		t.Fatalf("CommitObject() error = %v", err)
+	}
+	if commit.Author.Name != "Release Author" || commit.Author.Email != "author@example.invalid" {
+		t.Fatalf("author = %s <%s>, want the GIT_AUTHOR_* identity", commit.Author.Name, commit.Author.Email)
+	}
+	if commit.Committer.Name != "GitLab CI" || commit.Committer.Email != "ci@example.invalid" {
+		t.Fatalf("committer = %s <%s>, want the GIT_COMMITTER_* identity", commit.Committer.Name, commit.Committer.Email)
+	}
+	ref, err := repository.Tag(result.TagName)
+	if err != nil {
+		t.Fatalf("Tag() error = %v", err)
+	}
+	tag, err := repository.TagObject(ref.Hash())
+	if err != nil {
+		t.Fatalf("TagObject() error = %v", err)
+	}
+	if tag.Tagger.Name != "GitLab CI" {
+		t.Fatalf("tagger = %s, want the committer", tag.Tagger.Name)
+	}
+}
+
+// A repository adopting the tool after years of history must not publish all
+// of it as its first release by accident.
+func TestRunRequiresAPreviousReleaseWhenConfigured(t *testing.T) {
+	tests := []struct {
+		name     string
+		tag      string
+		require  bool
+		force    bool
+		wantErr  bool
+		wantNext string
+	}{
+		{"first release refused", "", true, false, true, ""},
+		{"first release forced", "", true, true, false, "2026.08.0"},
+		{"previous release present", "2026.07.0", true, false, false, "2026.08.0"},
+		{"check off", "", false, false, false, "2026.08.0"},
+		{"other layout only", "2026.73", true, true, false, "2026.08.0"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir, worktree := newTestRepo(t)
+			commitFile(t, worktree, dir, "one.txt", "feat: first")
+			if test.tag != "" {
+				if err := (Git{Dir: dir}).CreateAnnotatedTagAt(context.Background(), plumbingHash(t, headHash(t, dir)), test.tag, "baseline"); err != nil {
+					t.Fatalf("CreateAnnotatedTagAt() error = %v", err)
+				}
+				commitFile(t, worktree, dir, "two.txt", "fix: second")
+			}
+			result, err := Run(context.Background(), Options{
+				RepoDir:                dir,
+				Versioning:             VersioningCalVer,
+				TagFormat:              "{{version}}",
+				Now:                    releaseNow,
+				DryRun:                 true,
+				RequirePreviousRelease: test.require,
+				ForceFirstRelease:      test.force,
+			})
+			if test.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "git tag -a 2026.08.0") {
+					t.Fatalf("Run() error = %v, want a hint to tag a baseline", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Run() error = %v", err)
+			}
+			if result.NextVersion != test.wantNext {
+				t.Fatalf("NextVersion = %q, want %q", result.NextVersion, test.wantNext)
+			}
+		})
+	}
+}
+
+func TestConfigEnablesTheRequirePreviousReleaseCheck(t *testing.T) {
+	if !MergeConfig(Options{}, Config{RequirePreviousRelease: true}).RequirePreviousRelease {
+		t.Fatal("the config did not enable the check")
+	}
+	if !MergeConfig(Options{RequirePreviousRelease: true}, Config{}).RequirePreviousRelease {
+		t.Fatal("the flag did not enable the check")
 	}
 }

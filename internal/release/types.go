@@ -48,7 +48,10 @@ type Options struct {
 	CreateTag         bool
 	CreateCommit      bool
 	ForceFirstRelease bool
-	SkipMergeCommits  bool
+	// RequirePreviousRelease refuses a first release: without a previous
+	// release tag the notes would list the whole history.
+	RequirePreviousRelease bool
+	SkipMergeCommits       bool
 	// Publish controls whether the release is created on the forge.
 	Pusher     Pusher
 	PushBranch bool
@@ -89,7 +92,9 @@ type Config struct {
 	Versioning   Versioning `yaml:"versioning"`
 	CalVerFormat string     `yaml:"calverFormat"`
 	Timezone     string     `yaml:"timezone"`
-	TagFormat    string     `yaml:"tagFormat"`
+	// RequirePreviousRelease refuses a first release, see Options.
+	RequirePreviousRelease bool   `yaml:"requirePreviousRelease"`
+	TagFormat              string `yaml:"tagFormat"`
 	// Changelog is a pointer so that "key absent" and "key present but empty"
 	// are told apart: only the latter disables the changelog.
 	Changelog *string `yaml:"changelog"`

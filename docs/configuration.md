@@ -22,6 +22,10 @@ calverFormat: YYYY.0M.MICRO
 # IANA timezone the calver date is read in; UTC when absent
 timezone: Europe/Moscow
 
+# fail instead of making a first release when no previous release tag is
+# reachable from HEAD; for repositories that adopt the tool after a history
+requirePreviousRelease: true
+
 # must contain the {{version}} placeholder
 tagFormat: "v{{version}}"
 
@@ -323,3 +327,16 @@ If the repository has version tags that match neither the configured
 history would be released. The tool stops and names the offending tags instead.
 `--force-first-release` accepts a full first release if that is really the
 intent.
+
+A repository without any release tag is a first release, and its notes list
+the whole history. `requirePreviousRelease: true` (or
+`--require-previous-release`) turns that into an error with the command that
+tags a baseline; `--force-first-release` still overrides it.
+
+## Commit identity
+
+The release commit and the tag are signed like git does: `GIT_AUTHOR_NAME`,
+`GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL` first, then
+`user.name` and `user.email` from the repository, global and system git config.
+The tag carries the committer. The container image has no git, so CI jobs set
+the variables rather than run `git config`.
