@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.2.0...v1.3.0) (2026-10-02)
+
+### Features
+
+- run without git in the image and refuse unintended first releases ([1672eb5](https://github.com/yuki-nemurenai/magic-releaser/commit/1672eb5fb7ca317947de4232bdc1a001f0c9198f))
+
 ## [1.2.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.1.0...v1.2.0) (2026-10-01)
 
 ### Features
