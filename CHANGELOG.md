@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.4.0...v1.5.0) (2026-10-02)
+
+### Features
+
+- bump the root package version in npm lock files ([49670f2](https://github.com/yuki-nemurenai/magic-releaser/commit/49670f276245ca3fa2f718f87756ce4d1eedeaec))
+
 ## [1.4.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.3.0...v1.4.0) (2026-10-02)
 
 ### Features
