@@ -197,3 +197,52 @@ func contains(values []string, want string) bool {
 	}
 	return false
 }
+
+// The root package version lives twice in an npm lock file; dependencies carry
+// versions of their own that must stay untouched.
+func TestBumpPackageLockChangesOnlyTheRootPackage(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			"lockfile v3",
+			"{\n  \"name\": \"app\",\n  \"version\": \"1.9.1\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n" +
+				"    \"\": {\n      \"name\": \"app\",\n      \"version\": \"1.9.1\"\n    },\n" +
+				"    \"node_modules/x\": {\n      \"version\": \"1.9.1\"\n    }\n  }\n}\n",
+			"{\n  \"name\": \"app\",\n  \"version\": \"1.10.0\",\n  \"lockfileVersion\": 3,\n  \"packages\": {\n" +
+				"    \"\": {\n      \"name\": \"app\",\n      \"version\": \"1.10.0\"\n    },\n" +
+				"    \"node_modules/x\": {\n      \"version\": \"1.9.1\"\n    }\n  }\n}\n",
+		},
+		{
+			"lockfile v1 without packages",
+			"{\n  \"name\": \"app\",\n  \"version\": \"1.9.1\",\n  \"lockfileVersion\": 1,\n  \"dependencies\": {\"x\": {\"version\": \"1.9.1\"}}\n}\n",
+			"{\n  \"name\": \"app\",\n  \"version\": \"1.10.0\",\n  \"lockfileVersion\": 1,\n  \"dependencies\": {\"x\": {\"version\": \"1.9.1\"}}\n}\n",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			writeFile(t, dir, "package-lock.json", test.in)
+			if err := bumpPackageLock(filepath.Join(dir, "package-lock.json"), "1.10.0"); err != nil {
+				t.Fatalf("bumpPackageLock() error = %v", err)
+			}
+			if got := readFile(t, dir, "package-lock.json"); got != test.want {
+				t.Fatalf("package-lock.json =\n%s\nwant\n%s", got, test.want)
+			}
+		})
+	}
+}
+
+func TestBumpPackageLockRejectsAFileWithoutAVersion(t *testing.T) {
+	dir := t.TempDir()
+	original := `{"name":"app","lockfileVersion":3,"packages":{"":{"version":"1.0.0"}}}`
+	writeFile(t, dir, "package-lock.json", original)
+	if err := bumpPackageLock(filepath.Join(dir, "package-lock.json"), "1.1.0"); err == nil {
+		t.Fatal("bumpPackageLock() error = nil, want an error")
+	}
+	if got := readFile(t, dir, "package-lock.json"); got != original {
+		t.Fatalf("the file was modified: %s", got)
+	}
+}

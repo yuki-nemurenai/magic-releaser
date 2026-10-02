@@ -61,6 +61,8 @@ func bumpFile(repoDir, packagePath string, file BumpFileConfig, version string) 
 	switch file.Type {
 	case "package-json":
 		err = bumpPackageJSON(fullPath, version)
+	case "package-lock":
+		err = bumpPackageLock(fullPath, version)
 	case "helm-chart":
 		err = bumpHelmChart(fullPath, version)
 	case "docker":
@@ -70,7 +72,7 @@ func bumpFile(repoDir, packagePath string, file BumpFileConfig, version string) 
 	case "plain":
 		err = os.WriteFile(fullPath, []byte(version+"\n"), 0o644)
 	default:
-		return "", fmt.Errorf("unsupported bump file type %q for %s: use package-json, helm-chart, docker, generic or plain",
+		return "", fmt.Errorf("unsupported bump file type %q for %s: use package-json, package-lock, helm-chart, docker, generic or plain",
 			file.Type, relativePath)
 	}
 	if err != nil {
@@ -87,49 +89,114 @@ func bumpPackageJSON(path, version string) error {
 	if err != nil {
 		return err
 	}
-	start, end, err := topLevelJSONString(data, "version")
+	start, end, found, err := jsonStringRange(data, "version")
 	if err != nil {
 		return err
 	}
-	encoded, err := json.Marshal(version)
+	if !found {
+		return errors.New(`no top level "version" key`)
+	}
+	return writeJSONStrings(path, data, version, [][2]int{{start, end}})
+}
+
+// bumpPackageLock rewrites the version of the root package in an npm lock file:
+// the top level version and, from lockfileVersion 2 on, packages[""].version.
+// npm keeps them equal to package.json, which is what release-please's node
+// release type maintains as well.
+func bumpPackageLock(path, version string) error {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	output := make([]byte, 0, len(data)+len(encoded))
-	output = append(output, data[:start]...)
-	output = append(output, encoded...)
-	output = append(output, data[end:]...)
+	start, end, found, err := jsonStringRange(data, "version")
+	if err != nil {
+		return err
+	}
+	if !found {
+		return errors.New(`no top level "version" key`)
+	}
+	ranges := [][2]int{{start, end}}
+	start, end, found, err = jsonStringRange(data, "packages", "", "version")
+	if err != nil {
+		return err
+	}
+	if found {
+		ranges = append(ranges, [2]int{start, end})
+	}
+	return writeJSONStrings(path, data, version, ranges)
+}
+
+// writeJSONStrings replaces the given string values, quotes included, and
+// leaves every other byte of the file as it is.
+func writeJSONStrings(path string, data []byte, value string, ranges [][2]int) error {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	sort.Slice(ranges, func(i, j int) bool { return ranges[i][0] < ranges[j][0] })
+	output := make([]byte, 0, len(data)+len(ranges)*len(encoded))
+	last := 0
+	for _, r := range ranges {
+		output = append(output, data[last:r[0]]...)
+		output = append(output, encoded...)
+		last = r[1]
+	}
+	output = append(output, data[last:]...)
 	return os.WriteFile(path, output, 0o644)
 }
 
-// topLevelJSONString returns the byte range of the string value of a top level
-// key, quotes included.
-func topLevelJSONString(data []byte, key string) (int, int, error) {
+// jsonStringRange follows a path of keys through nested objects to a string
+// value and returns its byte range in data, quotes included. A missing key is
+// reported as not found; a value of another type is an error.
+func jsonStringRange(data []byte, path ...string) (int, int, bool, error) {
+	base := 0
+	object := data
+	for index, key := range path {
+		start, end, found, err := jsonValueRange(object, key)
+		if err != nil || !found {
+			return 0, 0, found, err
+		}
+		value := object[start:end]
+		if index == len(path)-1 {
+			if len(value) == 0 || value[0] != '"' {
+				return 0, 0, false, fmt.Errorf("%q is not a string", strings.Join(path, "."))
+			}
+			return base + start, base + end, true, nil
+		}
+		if len(value) == 0 || value[0] != '{' {
+			return 0, 0, false, nil
+		}
+		base += start
+		object = value
+	}
+	return 0, 0, false, nil
+}
+
+// jsonValueRange returns the byte range of the raw value of a key of the JSON
+// object in data.
+func jsonValueRange(data []byte, key string) (int, int, bool, error) {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
-		return 0, 0, errors.New("not a JSON object")
+		return 0, 0, false, errors.New("not a JSON object")
 	}
 	for decoder.More() {
 		token, err := decoder.Token()
 		if err != nil {
-			return 0, 0, fmt.Errorf("parse JSON: %w", err)
+			return 0, 0, false, fmt.Errorf("parse JSON: %w", err)
 		}
 		afterKey := int(decoder.InputOffset())
 		var value json.RawMessage
 		if err := decoder.Decode(&value); err != nil {
-			return 0, 0, fmt.Errorf("parse JSON: %w", err)
+			return 0, 0, false, fmt.Errorf("parse JSON: %w", err)
 		}
 		if token != key {
 			continue
 		}
 		end := int(decoder.InputOffset())
-		start := bytes.IndexByte(data[afterKey:end], '"')
-		if start < 0 || len(value) == 0 || value[0] != '"' {
-			return 0, 0, fmt.Errorf("top level %q is not a string", key)
-		}
-		return afterKey + start, end, nil
+		start := end - len(bytes.TrimLeft(data[afterKey:end], " \t\r\n:"))
+		return start, end, true, nil
 	}
-	return 0, 0, fmt.Errorf("no top level %q key", key)
+	return 0, 0, false, nil
 }
 
 // helmVersionLine matches a top level version or appVersion key, keeping the

@@ -168,6 +168,7 @@ survive and the release commit shows a one line change.
 | Type | Effect |
 |------|--------|
 | `package-json` | sets the top level `version`; the key has to exist |
+| `package-lock` | sets the version of the root package of an npm lock file: the top level `version`, and `packages[""].version` from lockfileVersion 2 on |
 | `helm-chart` | sets the top level `version` and `appVersion` |
 | `docker` | rewrites the tag of `image`, which is required: base images are left alone |
 | `plain` | writes the bare version |

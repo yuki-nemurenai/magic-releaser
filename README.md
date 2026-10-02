@@ -470,6 +470,7 @@ change.
 | Type | Updates |
 |------|---------|
 | `package-json` | the top level `version` |
+| `package-lock` | the version of the root package in an npm lock file: the top level `version` and `packages[""].version` |
 | `helm-chart` | the top level `version` and `appVersion` |
 | `docker` | the tag of `image` (required), e.g. `ghcr.io/acme/app:1.4.0` |
 | `plain` | the whole file becomes the version |
@@ -570,7 +571,7 @@ pushed through the SSH agent.
 | `@semantic-release/changelog` | `changelog: CHANGELOG.md` |
 | `@semantic-release/git` | built in: the release commit |
 | `@semantic-release/github`, `@semantic-release/gitlab` | `--publish` |
-| `@semantic-release/npm` (version only) | `type: package-json` |
+| `@semantic-release/npm` (version only) | `type: package-json` and `type: package-lock` |
 | `@semantic-release/exec` | a following CI step reading the outputs |
 | `branches` | the CI trigger of the release job |
 
@@ -580,7 +581,17 @@ Existing `v1.2.3` tags are recognised as they are, so the next release continues
 
 Keep your annotations with `marker: x-release-please` on each `generic` file, and move the
 version files of `release-please-config.json` to `packages`. magic-releaser releases directly on
-the branch instead of through a release pull request.
+the branch instead of through a release pull request. Existing `vX.Y.Z` tags and the release-please
+`CHANGELOG.md` continue as they are: on GitHub the headings have the same shape.
+
+| release-please `release-type` | `packages` files |
+|-------------------------------|------------------|
+| `simple` | `type: plain` for `version.txt` |
+| `node` | `type: package-json` and `type: package-lock` |
+| `helm` | `type: helm-chart` |
+
+release-please shows only features, fixes, performance improvements and reverts in the notes; list
+the same categories in `notes.categories` to keep that.
 
 ### Changing the version layout
 
