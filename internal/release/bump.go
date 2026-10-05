@@ -23,11 +23,11 @@ func BumpVersionFiles(repoDir string, packages []PackageConfig, manifestPath, ve
 
 	for _, pkg := range packages {
 		for _, file := range pkg.Files {
-			path, err := bumpFile(repoDir, pkg.Path, file, version)
+			paths, err := bumpFile(repoDir, pkg.Path, file, version)
 			if err != nil {
 				return nil, err
 			}
-			if path != "" {
+			for _, path := range paths {
 				changed[path] = true
 			}
 		}
@@ -51,34 +51,67 @@ func BumpVersionFiles(repoDir string, packages []PackageConfig, manifestPath, ve
 	return paths, nil
 }
 
-func bumpFile(repoDir, packagePath string, file BumpFileConfig, version string) (string, error) {
+// fileTypes lists the supported types of version files.
+const fileTypes = "node, helm, dotnet, maven, python, rust, php, ruby, dart, elixir, r, simple, docker or generic"
+
+func bumpFile(repoDir, packagePath string, file BumpFileConfig, version string) ([]string, error) {
 	fullPath := filepath.Join(repoDir, packagePath, file.Path)
 	relativePath, err := filepath.Rel(repoDir, fullPath)
 	if err != nil {
 		relativePath = fullPath
 	}
 
+	var paths []string
 	switch file.Type {
-	case "package-json":
-		err = bumpPackageJSON(fullPath, version)
-	case "package-lock":
-		err = bumpPackageLock(fullPath, version)
-	case "helm-chart":
-		err = bumpHelmChart(fullPath, version)
+	case "node":
+		paths, err = bumpNode(fullPath, version)
+	case "helm":
+		paths, err = bumpHelm(fullPath, version)
+	case "dotnet":
+		paths, err = bumpDotnet(fullPath, version)
+	case "maven":
+		paths, err = bumpMaven(fullPath, version)
+	case "python":
+		paths, err = bumpPython(fullPath, version)
+	case "rust":
+		paths, err = bumpRust(fullPath, version)
+	case "php":
+		paths, err = bumpPHP(fullPath, version)
+	case "ruby":
+		paths, err = bumpRuby(fullPath, version)
+	case "dart":
+		paths, err = bumpDart(fullPath, version)
+	case "elixir":
+		paths, err = bumpElixir(fullPath, version)
+	case "r":
+		paths, err = bumpR(fullPath, version)
+	case "simple", "plain":
+		paths, err = bumpSimple(fullPath, version)
 	case "docker":
-		err = bumpDockerTag(fullPath, file.Image, version)
+		paths, err = []string{fullPath}, bumpDockerTag(fullPath, file.Image, version)
 	case "generic":
-		err = bumpGenericFile(fullPath, file.Marker, file.Pattern, version)
-	case "plain":
-		err = os.WriteFile(fullPath, []byte(version+"\n"), 0o644)
+		paths, err = []string{fullPath}, bumpGenericFile(fullPath, file.Marker, file.Pattern, version)
+	// The former names keep their exact former behaviour.
+	case "package-json":
+		paths, err = []string{fullPath}, bumpPackageJSON(fullPath, version)
+	case "package-lock":
+		paths, err = []string{fullPath}, bumpPackageLock(fullPath, version)
+	case "helm-chart":
+		paths, err = []string{fullPath}, bumpHelmChart(fullPath, version)
 	default:
-		return "", fmt.Errorf("unsupported bump file type %q for %s: use package-json, package-lock, helm-chart, docker, generic or plain",
-			file.Type, relativePath)
+		return nil, fmt.Errorf("unsupported bump file type %q for %s: use %s", file.Type, relativePath, fileTypes)
 	}
 	if err != nil {
-		return "", fmt.Errorf("bump %s: %w", relativePath, err)
+		return nil, fmt.Errorf("bump %s: %w", relativePath, err)
 	}
-	return relativePath, nil
+	relative := make([]string, 0, len(paths))
+	for _, path := range paths {
+		if rel, err := filepath.Rel(repoDir, path); err == nil {
+			path = rel
+		}
+		relative = append(relative, path)
+	}
+	return relative, nil
 }
 
 // bumpPackageJSON rewrites the top level version in place. Decoding into a map

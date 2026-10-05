@@ -40,6 +40,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{}, fmt.Errorf("timezone %q: %w", options.Timezone, err)
 	}
 	options.Now = options.Now.In(location)
+	warnDeprecatedFileTypes(options)
 
 	git := Git{Dir: options.RepoDir}
 	shallow, err := git.IsShallow(ctx)
@@ -374,6 +375,19 @@ func checkStrategyConsistency(options Options, boundary releaseBoundary) error {
 		"found %d version-like tag(s) (%s) that match neither versioning %q nor tag format %q, so the last release boundary is unknown and the entire history would be released; either switch back to the previous strategy, or pass --force-first-release to accept a first release",
 		len(foreignTags), joinLimited(preview, ", "), options.Versioning, options.TagFormat,
 	)
+}
+
+// warnDeprecatedFileTypes names the former file types still in use. They keep
+// working, so a configuration is migrated when convenient rather than at once.
+func warnDeprecatedFileTypes(options Options) {
+	for _, pkg := range options.Packages {
+		for _, file := range pkg.Files {
+			if replacement, ok := deprecatedFileTypes[file.Type]; ok {
+				fmt.Fprintf(options.ErrorOutput, "warning: file type %q of %s is deprecated, use %q\n",
+					file.Type, file.Path, replacement)
+			}
+		}
+	}
 }
 
 // checkPreviousRelease refuses a first release when the configuration asks
