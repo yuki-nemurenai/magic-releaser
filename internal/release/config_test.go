@@ -86,6 +86,7 @@ calverFormat: YYYY.MM.DD
 timezone: Asia/Tomsk
 requirePreviousRelease: true
 backMerge: [development, candidate]
+linkedVersions: [[api, web]]
 tagFormat: "v{{version}}"
 changelog: CHANGELOG.md
 releaseCommitMessage: "chore(release): {{tag}}"

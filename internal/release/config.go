@@ -58,6 +58,9 @@ func MergeConfig(options Options, config Config) Options {
 		options.Changelog = *config.Changelog
 		options.ChangelogSet = true
 	}
+	if len(options.LinkedVersions) == 0 {
+		options.LinkedVersions = config.LinkedVersions
+	}
 	if len(options.BackMerge) == 0 {
 		options.BackMerge = config.BackMerge
 	}

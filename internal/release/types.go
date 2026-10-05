@@ -61,31 +61,35 @@ type Options struct {
 	// ReleaseCommitMessage is the template of the release commit message.
 	ReleaseCommitMessage string
 	// BackMerge lists the branches the release is merged into afterwards.
-	BackMerge   []string
-	Publish     bool
-	Provider    string
-	Token       string
-	APIURL      string
-	Push        bool
-	Draft       bool
-	Prerelease  bool
-	ReleaseName string
-	Now         time.Time
-	Output      io.Writer
-	ErrorOutput io.Writer
+	BackMerge []string
+	// LinkedVersions are groups of components that always share a version.
+	LinkedVersions [][]string
+	Publish        bool
+	Provider       string
+	Token          string
+	APIURL         string
+	Push           bool
+	Draft          bool
+	Prerelease     bool
+	ReleaseName    string
+	Now            time.Time
+	Output         io.Writer
+	ErrorOutput    io.Writer
 }
 
 type Result struct {
-	Released         bool
-	LastVersion      string
-	NextVersion      string
-	TagName          string
-	Notes            string
-	Commits          []Commit
-	BumpedFiles      []string
-	ReleaseCommit    string
-	ReleaseURL       string
-	BackMerges       []publisher.BackMergeResult
+	Released      bool
+	LastVersion   string
+	NextVersion   string
+	TagName       string
+	Notes         string
+	Commits       []Commit
+	BumpedFiles   []string
+	ReleaseCommit string
+	ReleaseURL    string
+	BackMerges    []publisher.BackMergeResult
+	// Components are the per component results of a monorepo release.
+	Components       []ComponentResult
 	Published        bool
 	PullRequestTitle string
 	PullRequestBody  string
@@ -99,6 +103,9 @@ type Config struct {
 	// BackMerge lists the branches the release is merged into afterwards,
 	// such as the integration branches of a git flow.
 	BackMerge []string `yaml:"backMerge"`
+	// LinkedVersions are groups of monorepo components that always share a
+	// version: when one of them is released, all of them are.
+	LinkedVersions [][]string `yaml:"linkedVersions"`
 	// RequirePreviousRelease refuses a first release, see Options.
 	RequirePreviousRelease bool   `yaml:"requirePreviousRelease"`
 	TagFormat              string `yaml:"tagFormat"`
@@ -128,14 +135,21 @@ type NotesConfig struct {
 	Style NotesStyle `yaml:"style"`
 }
 
-// PackageConfig describes one package of the repository. The whole release
-// shares a single version, so per package versioning is deliberately absent
-// rather than silently ignored.
+// PackageConfig describes one package of the repository. Without components
+// the whole repository shares one version. With them it is a monorepo: each
+// component is released on its own, from the commits that touch its path.
 type PackageConfig struct {
-	Name      string           `yaml:"name"`
-	Path      string           `yaml:"path"`
-	Changelog string           `yaml:"changelog"`
-	Files     []BumpFileConfig `yaml:"files"`
+	Name string `yaml:"name"`
+	// Path is the directory of the package; "." is the whole repository.
+	Path string `yaml:"path"`
+	// Component names an independently released package of a monorepo, and
+	// its tags through {{component}} in the tag format.
+	Component string `yaml:"component"`
+	// ExcludePaths are directories under Path whose changes do not release
+	// the component, such as the nested packages of a root package.
+	ExcludePaths []string         `yaml:"excludePaths"`
+	Changelog    string           `yaml:"changelog"`
+	Files        []BumpFileConfig `yaml:"files"`
 }
 
 type BumpFileConfig struct {
@@ -162,6 +176,8 @@ type Commit struct {
 	SkipRelease  bool
 	AuthorName   string
 	AuthorEmail  string
+	// Files are the paths the commit changes, listed only for a monorepo.
+	Files []string
 }
 
 type Level int
@@ -184,4 +200,16 @@ func (level Level) String() string {
 	default:
 		return "none"
 	}
+}
+
+// ComponentResult is the release of one component of a monorepo.
+type ComponentResult struct {
+	Component   string
+	Path        string
+	Released    bool
+	LastVersion string
+	NextVersion string
+	TagName     string
+	Notes       string
+	ReleaseURL  string
 }

@@ -89,7 +89,10 @@ func (git Git) AllTags(ctx context.Context) ([]Tag, error) {
 	return tags, nil
 }
 
-func (git Git) Commits(ctx context.Context, sinceTag Tag) ([]Commit, error) {
+// Commits returns the commits of HEAD that sinceTag does not contain. withFiles
+// also lists the paths each commit changes, which a monorepo needs to tell the
+// packages a commit belongs to.
+func (git Git) Commits(ctx context.Context, sinceTag Tag, withFiles bool) ([]Commit, error) {
 	repository, err := git.open()
 	if err != nil {
 		return nil, err
@@ -127,6 +130,13 @@ func (git Git) Commits(ctx context.Context, sinceTag Tag) ([]Commit, error) {
 		}
 		parsed.AuthorName = commit.Author.Name
 		parsed.AuthorEmail = commit.Author.Email
+		if withFiles {
+			files, err := changedFiles(commit)
+			if err != nil {
+				return fmt.Errorf("files of %s: %w", commit.Hash, err)
+			}
+			parsed.Files = files
+		}
 		commits = append(commits, parsed)
 		return nil
 	})
@@ -134,6 +144,39 @@ func (git Git) Commits(ctx context.Context, sinceTag Tag) ([]Commit, error) {
 		return nil, err
 	}
 	return commits, nil
+}
+
+// changedFiles lists the paths a commit changes against its first parent, or
+// every path of a root commit.
+func changedFiles(commit *object.Commit) ([]string, error) {
+	tree, err := commit.Tree()
+	if err != nil {
+		return nil, err
+	}
+	var parentTree *object.Tree
+	if commit.NumParents() > 0 {
+		parent, err := commit.Parent(0)
+		if err != nil {
+			return nil, err
+		}
+		if parentTree, err = parent.Tree(); err != nil {
+			return nil, err
+		}
+	}
+	changes, err := object.DiffTree(parentTree, tree)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]string, 0, len(changes))
+	for _, change := range changes {
+		if change.From.Name != "" {
+			files = append(files, change.From.Name)
+		}
+		if change.To.Name != "" && change.To.Name != change.From.Name {
+			files = append(files, change.To.Name)
+		}
+	}
+	return files, nil
 }
 
 // HasTag reports whether a tag with the given name already exists.

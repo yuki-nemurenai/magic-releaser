@@ -74,6 +74,12 @@ outputs:
   release-commit:
     description: Hash of the release commit.
     value: ${{ steps.release.outputs.release-commit }}
+  components:
+    description: 'Monorepo: JSON array of the released components, e.g. ["api","web"].'
+    value: ${{ steps.release.outputs.components }}
+  releases:
+    description: 'Monorepo: JSON object of the released components, each with version, previous-version, tag and release-url.'
+    value: ${{ steps.release.outputs.releases }}
 
 runs:
   using: composite
@@ -222,5 +228,7 @@ runs:
             RELEASE_TAG) echo "tag=$value" ;;
             RELEASE_URL) echo "release-url=$value" ;;
             RELEASE_COMMIT) echo "release-commit=$value" ;;
+            RELEASE_COMPONENTS) echo "components=$value" ;;
+            RELEASE_RELEASES) echo "releases=$value" ;;
           esac
         done < "$outputs" >> "$GITHUB_OUTPUT"

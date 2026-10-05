@@ -29,8 +29,9 @@ type Request struct {
 	// rather than by a local branch name, because a CI runner checks the
 	// commit out on a detached HEAD and has no local branch to push from.
 	Commit string
-	// Tag is the name of an existing local tag.
-	Tag string
+	// Tags are existing local tags: one per released component of a monorepo,
+	// so they all reach the remote with the release commit or not at all.
+	Tags []string
 }
 
 // Pusher pushes to a single remote of a local repository.
@@ -145,8 +146,10 @@ func (request Request) refSpecs() ([]config.RefSpec, error) {
 		}
 		specs = append(specs, config.RefSpec(request.Commit+":refs/heads/"+request.Branch))
 	}
-	if tag := strings.TrimSpace(request.Tag); tag != "" {
-		specs = append(specs, config.RefSpec("refs/tags/"+tag+":refs/tags/"+tag))
+	for _, tag := range request.Tags {
+		if tag = strings.TrimSpace(tag); tag != "" {
+			specs = append(specs, config.RefSpec("refs/tags/"+tag+":refs/tags/"+tag))
+		}
 	}
 	for _, spec := range specs {
 		if err := spec.Validate(); err != nil {
@@ -157,13 +160,14 @@ func (request Request) refSpecs() ([]config.RefSpec, error) {
 }
 
 func (request Request) describe() string {
+	tags := strings.Join(request.Tags, ", ")
 	switch {
-	case request.Branch != "" && request.Tag != "":
-		return fmt.Sprintf("branch %s and tag %s", request.Branch, request.Tag)
+	case request.Branch != "" && tags != "":
+		return fmt.Sprintf("branch %s and tags %s", request.Branch, tags)
 	case request.Branch != "":
 		return "branch " + request.Branch
 	default:
-		return "tag " + request.Tag
+		return "tags " + tags
 	}
 }
 

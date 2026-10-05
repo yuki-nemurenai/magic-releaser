@@ -395,7 +395,7 @@ type recordingPusher struct {
 
 func (p *recordingPusher) Push(ctx context.Context, request pusher.Request) error {
 	p.calls++
-	p.tag, p.branch, p.commit = request.Tag, request.Branch, request.Commit
+	p.tag, p.branch, p.commit = strings.Join(request.Tags, ","), request.Branch, request.Commit
 	return p.err
 }
 

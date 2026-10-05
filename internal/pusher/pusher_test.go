@@ -192,7 +192,7 @@ func TestPushDeliversATag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	if err := tagPusher.Push(context.Background(), Request{Tag: "v1.0.0"}); err != nil {
+	if err := tagPusher.Push(context.Background(), Request{Tags: []string{"v1.0.0"}}); err != nil {
 		t.Fatalf("Push() error = %v", err)
 	}
 	if !tagRefs(t, bare)["v1.0.0"] {
@@ -217,7 +217,7 @@ func TestPushDeliversTheReleaseCommitFromADetachedHead(t *testing.T) {
 	if err := tagPusher.Push(context.Background(), Request{
 		Branch: "main",
 		Commit: release.String(),
-		Tag:    "2026.09.1",
+		Tags:   []string{"2026.09.1"},
 	}); err != nil {
 		t.Fatalf("Push() error = %v", err)
 	}
@@ -249,7 +249,7 @@ func TestPushIsAtomicWhenTheBranchIsRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	err = tagPusher.Push(context.Background(), Request{Branch: "main", Commit: release.String(), Tag: "2026.09.1"})
+	err = tagPusher.Push(context.Background(), Request{Branch: "main", Commit: release.String(), Tags: []string{"2026.09.1"}})
 	if err == nil {
 		t.Fatal("Push() error = nil, want the rejected branch update")
 	}
@@ -292,7 +292,7 @@ func TestPushWithAnEmptyRequestDoesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
-	if err := tagPusher.Push(context.Background(), Request{Tag: "  "}); err != nil {
+	if err := tagPusher.Push(context.Background(), Request{Tags: []string{"  "}}); err != nil {
 		t.Fatalf("Push() error = %v, want nil for nothing to deliver", err)
 	}
 }

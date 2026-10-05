@@ -51,6 +51,9 @@ func Run(ctx context.Context, options Options) (Result, error) {
 		return Result{}, errors.New("the repository is a shallow clone, so the release history and tags are incomplete; " +
 			"fetch the full history (GitHub Actions: fetch-depth: 0, GitLab CI: GIT_DEPTH: 0, locally: git fetch --unshallow --tags)")
 	}
+	if isMonorepo(options.Packages) {
+		return runMonorepo(ctx, git, options)
+	}
 	boundary, err := resolveBoundary(ctx, git, options)
 	if err != nil {
 		return Result{}, err
@@ -63,7 +66,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}
 	lastVersion, lastTag := boundary.BoundaryVersion, boundary.Tag
 
-	commits, err := git.Commits(ctx, lastTag)
+	commits, err := git.Commits(ctx, lastTag, false)
 	if err != nil {
 		return Result{}, err
 	}
@@ -123,7 +126,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}
 	fmt.Fprintf(options.Output, "Next version: %s\n", nextVersion)
 	if options.Publish {
-		fmt.Fprintf(options.Output, "Release name: %s\n", releaseName(options.ReleaseName, options.Notes.Style, tagName, nextVersion))
+		fmt.Fprintf(options.Output, "Release name: %s\n", releaseName(options.ReleaseName, options.Notes.Style, tagName, nextVersion, ""))
 	}
 	fmt.Fprintf(options.Output, "Tag: %s\n\n%s", tagName, notes)
 
@@ -189,7 +192,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 			return Result{}, err
 		}
 	}
-	if err := deliverRelease(ctx, options, result, pushBranch); err != nil {
+	if err := deliverRelease(ctx, options, result.ReleaseCommit, []string{result.TagName}, pushBranch); err != nil {
 		return Result{}, err
 	}
 	if err := publishRelease(ctx, options, repo, &result, nextVersion, tagName, notes); err != nil {
@@ -212,29 +215,36 @@ const DefaultReleaseCommitMessage = "chore(release): {{tag}}"
 const (
 	DefaultReleaseName                      = "Release {{version}}"
 	DefaultConventionalChangelogReleaseName = "{{tag}}"
+	// DefaultComponentReleaseName titles the release of a monorepo component
+	// in the keep-a-changelog style.
+	DefaultComponentReleaseName = "Release {{component}} {{version}}"
 )
 
 func releaseCommitMessage(template, tagName, version string) string {
 	if template == "" {
 		template = DefaultReleaseCommitMessage
 	}
-	return expandTemplate(template, tagName, version)
+	return expandTemplate(template, tagName, version, "")
 }
 
-func releaseName(template string, style NotesStyle, tagName, version string) string {
+// releaseName titles a forge release; component is empty outside a monorepo.
+func releaseName(template string, style NotesStyle, tagName, version, component string) string {
 	switch {
 	case template != "":
 	case style == NotesStyleConventionalChangelog:
 		template = DefaultConventionalChangelogReleaseName
+	case component != "":
+		template = DefaultComponentReleaseName
 	default:
 		template = DefaultReleaseName
 	}
-	return expandTemplate(template, tagName, version)
+	return expandTemplate(template, tagName, version, component)
 }
 
-// expandTemplate substitutes the {{tag}} and {{version}} placeholders.
-func expandTemplate(template, tagName, version string) string {
-	return strings.ReplaceAll(strings.ReplaceAll(template, "{{tag}}", tagName), "{{version}}", version)
+// expandTemplate substitutes the {{tag}}, {{version}} and {{component}}
+// placeholders.
+func expandTemplate(template, tagName, version, component string) string {
+	return strings.NewReplacer("{{tag}}", tagName, "{{version}}", version, "{{component}}", component).Replace(template)
 }
 
 // resolvePushBranch returns the branch that receives the release commit, or an
@@ -262,28 +272,28 @@ func resolvePushBranch(ctx context.Context, git Git, options Options) (string, e
 // rejected branch update (a protected branch, a concurrent push) cannot leave
 // behind a tag on a commit the branch never received. The commit is pushed by
 // hash, which works for the detached HEAD of a CI runner.
-func deliverRelease(ctx context.Context, options Options, result Result, branch string) error {
+func deliverRelease(ctx context.Context, options Options, commit string, tags []string, branch string) error {
 	request := pusher.Request{}
 	if options.Push && options.CreateTag {
-		request.Tag = result.TagName
+		request.Tags = tags
 	}
-	if branch != "" && result.ReleaseCommit != "" {
+	if branch != "" && commit != "" {
 		request.Branch = branch
-		request.Commit = result.ReleaseCommit
+		request.Commit = commit
 	}
-	if request.Tag == "" && request.Branch == "" {
+	if len(request.Tags) == 0 && request.Branch == "" {
 		return nil
 	}
 	if options.Pusher == nil {
 		return errors.New("cannot push: no pusher is configured")
 	}
 	switch {
-	case request.Branch != "" && request.Tag != "":
-		fmt.Fprintf(options.Output, "Pushing release commit %s to %s and tag %s...\n", shortHash(request.Commit), request.Branch, request.Tag)
+	case request.Branch != "" && len(request.Tags) > 0:
+		fmt.Fprintf(options.Output, "Pushing release commit %s to %s and tag %s...\n", shortHash(request.Commit), request.Branch, strings.Join(request.Tags, ", "))
 	case request.Branch != "":
 		fmt.Fprintf(options.Output, "Pushing release commit %s to %s...\n", shortHash(request.Commit), request.Branch)
 	default:
-		fmt.Fprintf(options.Output, "Pushing tag %s...\n", request.Tag)
+		fmt.Fprintf(options.Output, "Pushing tag %s...\n", strings.Join(request.Tags, ", "))
 	}
 	return options.Pusher.Push(ctx, request)
 }
@@ -302,7 +312,7 @@ func publishRelease(ctx context.Context, options Options, repo repository.Info, 
 		Repository: repo,
 		TagName:    tagName,
 		Version:    version,
-		Name:       releaseName(options.ReleaseName, options.Notes.Style, tagName, version),
+		Name:       releaseName(options.ReleaseName, options.Notes.Style, tagName, version, ""),
 		Notes:      notes,
 		Target:     result.ReleaseCommit,
 		Draft:      options.Draft,
@@ -578,6 +588,9 @@ func withDefaults(options Options) Options {
 	}
 	if options.TagFormat == "" {
 		options.TagFormat = "v{{version}}"
+		if isMonorepo(options.Packages) {
+			options.TagFormat = DefaultMonorepoTagFormat
+		}
 	}
 	// An empty changelog is only meaningful when the user asked for it
 	// explicitly (--changelog ""), otherwise it is the documented default.
@@ -618,7 +631,7 @@ func validateOptions(options Options) error {
 	if _, _, ok := tagFormatParts(options.TagFormat); !ok {
 		return fmt.Errorf("tag format must contain {{version}}")
 	}
-	return nil
+	return validateMonorepo(options)
 }
 
 func relativePath(repoDir, path string) string {

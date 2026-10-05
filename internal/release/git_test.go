@@ -48,7 +48,7 @@ func TestGitCommitsSinceTag(t *testing.T) {
 		t.Fatalf("tag.Name = %q, want v1.0.0", tag.Name)
 	}
 
-	commits, err := git.Commits(context.Background(), tag)
+	commits, err := git.Commits(context.Background(), tag, false)
 	if err != nil {
 		t.Fatalf("Commits() error = %v", err)
 	}
@@ -117,7 +117,7 @@ func TestGitDetectDotGitFromSubdirectory(t *testing.T) {
 		t.Fatalf("MkdirAll() error = %v", err)
 	}
 	git := Git{Dir: subdir}
-	commits, err := git.Commits(context.Background(), Tag{})
+	commits, err := git.Commits(context.Background(), Tag{}, false)
 	if err != nil {
 		t.Fatalf("Commits() error = %v", err)
 	}
