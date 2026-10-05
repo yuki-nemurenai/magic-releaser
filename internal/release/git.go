@@ -212,6 +212,22 @@ func (git Git) CommitFiles(ctx context.Context, message string, paths []string) 
 	return hash, true, nil
 }
 
+// HeadHash returns the commit HEAD points at.
+func (git Git) HeadHash(ctx context.Context) (plumbing.Hash, error) {
+	if err := ctx.Err(); err != nil {
+		return plumbing.ZeroHash, err
+	}
+	repository, err := git.open()
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	head, err := repository.Head()
+	if err != nil {
+		return plumbing.ZeroHash, fmt.Errorf("resolve head: %w", err)
+	}
+	return head.Hash(), nil
+}
+
 // CurrentBranch returns the short name of the checked out branch, or an empty
 // string for a detached HEAD, which is how CI runners check a commit out.
 func (git Git) CurrentBranch(ctx context.Context) (string, error) {

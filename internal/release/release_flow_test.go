@@ -1176,3 +1176,107 @@ func TestRunCommitterFollowsTheAuthorVariables(t *testing.T) {
 		t.Fatalf("tagger = %s <%s>, want the author variables", tag.Tagger.Name, tag.Tagger.Email)
 	}
 }
+
+// A back-merge that cannot work is refused before anything is written.
+func TestRunChecksTheBackMergeBeforeWriting(t *testing.T) {
+	tests := []struct {
+		name      string
+		targets   []string
+		push      bool
+		wantError string
+	}{
+		{"without push", []string{"develop"}, false, "needs --push"},
+		{"the release branch itself", []string{"main"}, true, "release branch itself"},
+		{"listed twice", []string{"develop", "develop"}, true, "listed twice"},
+		{"not a branch name", []string{"-x"}, true, "not a branch name"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir, worktree := newTestRepo(t)
+			commitFile(t, worktree, dir, "one.txt", "feat: something new")
+			addRemote(t, dir)
+			_, err := Run(context.Background(), Options{
+				RepoDir:        dir,
+				Versioning:     VersioningCalVer,
+				Now:            releaseNow,
+				CreateTag:      true,
+				CreateCommit:   true,
+				Push:           test.push,
+				PushBranch:     test.push,
+				PushBranchName: "main",
+				Pusher:         &recordingPusher{},
+				BackMerge:      test.targets,
+			})
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("Run() error = %v, want %q", err, test.wantError)
+			}
+			if exists, _ := (Git{Dir: dir}).HasTag(context.Background(), "v2026.08.0"); exists {
+				t.Fatal("a tag was created although the back-merge was refused")
+			}
+		})
+	}
+}
+
+// After the push, the release commit is merged into each branch through the
+// forge, and a dry run only names the branches.
+func TestRunBackMergesTheRelease(t *testing.T) {
+	var merges []map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		merges = append(merges, body)
+		if body["base"] == "candidate" {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+	}))
+	t.Cleanup(server.Close)
+
+	dir, worktree := newTestRepo(t)
+	commitFile(t, worktree, dir, "one.txt", "feat: something new")
+	addRemote(t, dir)
+	options := Options{
+		RepoDir:        dir,
+		Versioning:     VersioningCalVer,
+		Now:            releaseNow,
+		CreateTag:      true,
+		CreateCommit:   true,
+		Push:           true,
+		PushBranch:     true,
+		PushBranchName: "main",
+		Pusher:         &recordingPusher{},
+		Token:          "t",
+		APIURL:         server.URL,
+		BackMerge:      []string{"develop", "candidate"},
+	}
+
+	var preview bytes.Buffer
+	dryRun := options
+	dryRun.DryRun = true
+	dryRun.Output = &preview
+	if _, err := Run(context.Background(), dryRun); err != nil {
+		t.Fatalf("Run(dry run) error = %v", err)
+	}
+	if !strings.Contains(preview.String(), "Back-merge into: develop, candidate") || len(merges) != 0 {
+		t.Fatalf("dry run output:\n%s\nmerges: %v", preview.String(), merges)
+	}
+
+	var output bytes.Buffer
+	options.Output = &output
+	result, err := Run(context.Background(), options)
+	if err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if len(merges) != 2 || merges[0]["base"] != "develop" || merges[0]["head"] != result.ReleaseCommit {
+		t.Fatalf("merges = %v, want develop and candidate from %s", merges, result.ReleaseCommit)
+	}
+	for _, want := range []string{"Back-merged v2026.08.0 into develop", "candidate already contains v2026.08.0"} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("output lacks %q:\n%s", want, output.String())
+		}
+	}
+	if len(result.BackMerges) != 2 {
+		t.Fatalf("BackMerges = %+v", result.BackMerges)
+	}
+}

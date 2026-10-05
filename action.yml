@@ -48,6 +48,9 @@ inputs:
   dry-run:
     description: Only print the calculated release, write nothing.
     default: "false"
+  back-merge:
+    description: Comma separated branches to merge the release into, e.g. develop. Defaults to backMerge of the config.
+    default: ""
   args:
     description: Extra command line arguments for magic-releaser release.
     default: ""
@@ -176,6 +179,7 @@ runs:
         INPUT_DRAFT: ${{ inputs.draft }}
         INPUT_PRERELEASE: ${{ inputs.prerelease }}
         INPUT_DRY_RUN: ${{ inputs.dry-run }}
+        INPUT_BACK_MERGE: ${{ inputs.back-merge }}
         INPUT_ARGS: ${{ inputs.args }}
       run: |
         set -euo pipefail
@@ -189,6 +193,7 @@ runs:
         [[ -n "$INPUT_CONFIG" ]] && args+=(--config "$INPUT_CONFIG")
         [[ "$INPUT_DRAFT" == "true" ]] && args+=(--draft)
         [[ "$INPUT_PRERELEASE" == "true" ]] && args+=(--prerelease)
+        [[ -n "$INPUT_BACK_MERGE" ]] && args+=(--back-merge "$INPUT_BACK_MERGE")
         if [[ "$INPUT_DRY_RUN" == "true" ]]; then
           args+=(--dry-run)
         else

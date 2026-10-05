@@ -133,8 +133,14 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	if err := checkBackMerge(ctx, git, options, repo, pushBranch); err != nil {
+		return Result{}, err
+	}
 
 	if options.DryRun {
+		if len(options.BackMerge) > 0 {
+			fmt.Fprintf(options.Output, "\nBack-merge into: %s\n", strings.Join(options.BackMerge, ", "))
+		}
 		fmt.Fprintln(options.Output, "\nDry run: changelog, version files, and git tag were not written.")
 		return result, nil
 	}
@@ -188,6 +194,9 @@ func Run(ctx context.Context, options Options) (Result, error) {
 	}
 	if err := publishRelease(ctx, options, repo, &result, nextVersion, tagName, notes); err != nil {
 		return Result{}, err
+	}
+	if err := backMerge(ctx, git, options, repo, &result); err != nil {
+		return result, fmt.Errorf("release %s is out, but the back-merge failed: %w", tagName, err)
 	}
 	return result, nil
 }
@@ -285,19 +294,7 @@ func publishRelease(ctx context.Context, options Options, repo repository.Info, 
 	if !options.Publish {
 		return nil
 	}
-	if !repo.Found() {
-		return errors.New("cannot publish: the repository has no usable git remote, configure one or pass --provider")
-	}
-	if options.Provider != "" {
-		repo.Provider = repository.Provider(options.Provider)
-	}
-	token := repository.ResolveToken(repo.Provider, options.Token)
-
-	release, err := publisher.New(repo, publisher.Options{
-		BaseURL: options.APIURL,
-		Token:   token,
-		Verbose: options.Output,
-	})
+	release, repo, err := forge(options, repo, "publish")
 	if err != nil {
 		return err
 	}
@@ -322,6 +319,100 @@ func publishRelease(ctx context.Context, options Options, repo repository.Info, 
 	}
 	fmt.Fprintf(options.Output, "%s release %s on %s: %s\n", action, tagName, published.Provider, published.URL)
 	return nil
+}
+
+// forge connects to the API of the repository's forge; purpose names the
+// operation in the error of a repository without a forge.
+func forge(options Options, repo repository.Info, purpose string) (publisher.Publisher, repository.Info, error) {
+	if !repo.Found() {
+		return nil, repo, fmt.Errorf("cannot %s: the repository has no usable git remote, configure one or pass --provider", purpose)
+	}
+	if options.Provider != "" {
+		repo.Provider = repository.Provider(options.Provider)
+	}
+	client, err := publisher.New(repo, publisher.Options{
+		BaseURL: options.APIURL,
+		Token:   repository.ResolveToken(repo.Provider, options.Token),
+		Verbose: options.Output,
+	})
+	return client, repo, err
+}
+
+// checkBackMerge validates the back-merge before anything is written.
+func checkBackMerge(ctx context.Context, git Git, options Options, repo repository.Info, pushBranch string) error {
+	if len(options.BackMerge) == 0 || options.Mode == ModePullRequest {
+		return nil
+	}
+	if !options.Push && !options.DryRun {
+		return errors.New("backMerge needs --push: the forge merges the release commit and its tag, which have to be on the remote")
+	}
+	if !repo.Found() && options.Provider == "" {
+		return errors.New("backMerge needs a GitHub or GitLab remote: the forge API makes the merge")
+	}
+	release := pushBranch
+	if release == "" {
+		branch, err := git.CurrentBranch(ctx)
+		if err != nil {
+			return err
+		}
+		release = branch
+	}
+	seen := map[string]bool{}
+	for _, target := range options.BackMerge {
+		switch {
+		case !validBranchName.MatchString(target):
+			return fmt.Errorf("backMerge: %q is not a branch name", target)
+		case target == release:
+			return fmt.Errorf("backMerge: %q is the release branch itself", target)
+		case seen[target]:
+			return fmt.Errorf("backMerge: %q is listed twice", target)
+		}
+		seen[target] = true
+	}
+	return nil
+}
+
+// validBranchName accepts the branch names a back-merge can target.
+var validBranchName = regexp.MustCompile(`^[A-Za-z0-9._][A-Za-z0-9._/-]*$`)
+
+// backMerge merges the published release into the configured branches. A
+// branch the forge cannot merge into automatically gets a pull or merge
+// request, reported as a warning: the release itself is complete.
+func backMerge(ctx context.Context, git Git, options Options, repo repository.Info, result *Result) error {
+	if len(options.BackMerge) == 0 || options.Mode == ModePullRequest {
+		return nil
+	}
+	commit := result.ReleaseCommit
+	if commit == "" {
+		head, err := git.HeadHash(ctx)
+		if err != nil {
+			return err
+		}
+		commit = head.String()
+	}
+	client, repo, err := forge(options, repo, "back-merge")
+	if err != nil {
+		return err
+	}
+	results, err := client.BackMerge(ctx, publisher.BackMergeRequest{
+		Repository: repo,
+		TagName:    result.TagName,
+		Commit:     commit,
+		Targets:    options.BackMerge,
+	})
+	result.BackMerges = results
+	for _, merge := range results {
+		switch merge.Outcome {
+		case publisher.BackMerged:
+			fmt.Fprintf(options.Output, "Back-merged %s into %s\n", result.TagName, merge.Target)
+		case publisher.BackMergeUpToDate:
+			fmt.Fprintf(options.Output, "%s already contains %s\n", merge.Target, result.TagName)
+		case publisher.BackMergePending:
+			fmt.Fprintf(options.ErrorOutput, "warning: back-merge of %s into %s needs a person (%s): %s\n",
+				result.TagName, merge.Target, merge.Reason, merge.URL)
+		}
+	}
+	return err
 }
 
 func tagMessage(tagName, notes string) string {

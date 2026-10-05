@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/yuki-nemurenai/magic-releaser/internal/publisher"
 	"github.com/yuki-nemurenai/magic-releaser/internal/pusher"
 )
 
@@ -59,17 +60,19 @@ type Options struct {
 	PushBranchName string
 	// ReleaseCommitMessage is the template of the release commit message.
 	ReleaseCommitMessage string
-	Publish              bool
-	Provider             string
-	Token                string
-	APIURL               string
-	Push                 bool
-	Draft                bool
-	Prerelease           bool
-	ReleaseName          string
-	Now                  time.Time
-	Output               io.Writer
-	ErrorOutput          io.Writer
+	// BackMerge lists the branches the release is merged into afterwards.
+	BackMerge   []string
+	Publish     bool
+	Provider    string
+	Token       string
+	APIURL      string
+	Push        bool
+	Draft       bool
+	Prerelease  bool
+	ReleaseName string
+	Now         time.Time
+	Output      io.Writer
+	ErrorOutput io.Writer
 }
 
 type Result struct {
@@ -82,6 +85,7 @@ type Result struct {
 	BumpedFiles      []string
 	ReleaseCommit    string
 	ReleaseURL       string
+	BackMerges       []publisher.BackMergeResult
 	Published        bool
 	PullRequestTitle string
 	PullRequestBody  string
@@ -92,6 +96,9 @@ type Config struct {
 	Versioning   Versioning `yaml:"versioning"`
 	CalVerFormat string     `yaml:"calverFormat"`
 	Timezone     string     `yaml:"timezone"`
+	// BackMerge lists the branches the release is merged into afterwards,
+	// such as the integration branches of a git flow.
+	BackMerge []string `yaml:"backMerge"`
 	// RequirePreviousRelease refuses a first release, see Options.
 	RequirePreviousRelease bool   `yaml:"requirePreviousRelease"`
 	TagFormat              string `yaml:"tagFormat"`

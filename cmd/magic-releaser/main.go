@@ -125,6 +125,7 @@ Modes:
 	command.Flags().BoolVar(&options.Publish, "publish", false, "create the release on GitHub or GitLab")
 	command.Flags().BoolVar(&options.Push, "push", false, "push the release commit and the tag to the remote in one atomic push")
 	command.Flags().BoolVar(&pushTagOnly, "push-tag-only", false, "with --push, push only the tag and leave the release commit local")
+	command.Flags().StringSliceVar(&options.BackMerge, "back-merge", nil, "after the release, merge it into these branches through the forge, e.g. develop,candidate (default: backMerge of the config)")
 	command.Flags().StringVar(&options.PushBranchName, "push-branch-name", "", "branch that receives the release commit, required for a detached HEAD (default: the current branch)")
 	command.Flags().StringVar(&options.Provider, "provider", "", "release provider: github or gitlab (default: detected from the remote)")
 	command.Flags().StringVar(&options.Token, "token", "", "API token (default: taken from the provider token environment variables)")

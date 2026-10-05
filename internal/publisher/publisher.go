@@ -58,6 +58,53 @@ type Result struct {
 type Publisher interface {
 	Provider() repository.Provider
 	Publish(ctx context.Context, request Request) (Result, error)
+	// BackMerge merges a release into other branches on the forge. A branch
+	// that cannot be merged automatically gets a pull or merge request for a
+	// person instead of an error.
+	BackMerge(ctx context.Context, request BackMergeRequest) ([]BackMergeResult, error)
+}
+
+// BackMergeRequest asks to merge a release commit into other branches.
+type BackMergeRequest struct {
+	Repository repository.Info
+	TagName    string
+	// Commit is the full SHA of the release commit.
+	Commit  string
+	Targets []string
+}
+
+// BackMergeOutcome tells what happened to one target branch.
+type BackMergeOutcome string
+
+const (
+	// BackMerged means the release was merged into the branch.
+	BackMerged BackMergeOutcome = "merged"
+	// BackMergeUpToDate means the branch already contained the release.
+	BackMergeUpToDate BackMergeOutcome = "up-to-date"
+	// BackMergePending means a pull or merge request waits for a person,
+	// because of a conflict or a rule of the forge.
+	BackMergePending BackMergeOutcome = "pending"
+)
+
+// BackMergeResult is the outcome for one target branch.
+type BackMergeResult struct {
+	Target  string
+	Outcome BackMergeOutcome
+	// URL is the pull or merge request of a pending back-merge.
+	URL string
+	// Reason explains a pending back-merge, e.g. a conflict.
+	Reason string
+}
+
+// backMergeTitle is the title of the merge commit and of the request.
+func backMergeTitle(tag, target string) string {
+	return fmt.Sprintf("chore: back-merge %s into %s", tag, target)
+}
+
+// backMergeBranch is the branch that carries the release commit into a
+// request when the forge cannot merge it right away.
+func backMergeBranch(tag, target string) string {
+	return "back-merge/" + tag + "/" + target
 }
 
 // Options configures a publisher.
@@ -74,6 +121,9 @@ type Options struct {
 	Verbose io.Writer
 	// HTTPClient overrides the transport, mainly for tests.
 	HTTPClient *http.Client
+	// PollInterval spaces the polls of an asynchronous forge check, mainly
+	// for tests.
+	PollInterval time.Duration
 }
 
 // New builds a publisher for the provider of the given repository.
@@ -96,12 +146,13 @@ func New(info repository.Info, options Options) (Publisher, error) {
 		return nil, fmt.Errorf("no API base URL known for host %q, pass --api-url", info.Host)
 	}
 	client := &Client{
-		BaseURL:    strings.TrimRight(base, "/"),
-		Token:      options.Token,
-		MaxRetries: options.MaxRetries,
-		Timeout:    options.Timeout,
-		Verbose:    options.Verbose,
-		HTTPClient: options.HTTPClient,
+		BaseURL:      strings.TrimRight(base, "/"),
+		Token:        options.Token,
+		MaxRetries:   options.MaxRetries,
+		Timeout:      options.Timeout,
+		Verbose:      options.Verbose,
+		HTTPClient:   options.HTTPClient,
+		PollInterval: options.PollInterval,
 	}
 	switch provider {
 	case repository.ProviderGitHub:
@@ -121,12 +172,20 @@ const (
 // Client is a small JSON HTTP client with retry and rate limit handling.
 // It is deliberately forge-agnostic: only the request shape differs.
 type Client struct {
-	BaseURL    string
-	Token      repository.Token
-	MaxRetries int
-	Timeout    time.Duration
-	Verbose    io.Writer
-	HTTPClient *http.Client
+	BaseURL      string
+	Token        repository.Token
+	MaxRetries   int
+	Timeout      time.Duration
+	Verbose      io.Writer
+	HTTPClient   *http.Client
+	PollInterval time.Duration
+}
+
+func (client *Client) pollInterval() time.Duration {
+	if client.PollInterval > 0 {
+		return client.PollInterval
+	}
+	return 2 * time.Second
 }
 
 func (client *Client) httpClient() *http.Client {
@@ -150,11 +209,18 @@ func (client *Client) retries() int {
 // Do performs a JSON request. A non 2xx response is returned as an APIError
 // so callers can tell a missing release from a rejected one.
 func (client *Client) Do(ctx context.Context, method, path string, body, out any) error {
+	_, err := client.send(ctx, method, path, body, out)
+	return err
+}
+
+// send performs a JSON request like Do and also reports the status of a
+// successful response, which some endpoints use to tell outcomes apart.
+func (client *Client) send(ctx context.Context, method, path string, body, out any) (int, error) {
 	var payload io.Reader
 	if body != nil {
 		encoded, err := json.Marshal(body)
 		if err != nil {
-			return fmt.Errorf("encode request body: %w", err)
+			return 0, fmt.Errorf("encode request body: %w", err)
 		}
 		payload = bytes.NewReader(encoded)
 	}
@@ -163,7 +229,7 @@ func (client *Client) Do(ctx context.Context, method, path string, body, out any
 	for attempt := 1; ; attempt++ {
 		request, err := http.NewRequestWithContext(ctx, method, client.BaseURL+path, payload)
 		if err != nil {
-			return err
+			return 0, err
 		}
 		request.Header.Set("Accept", "application/json")
 		if body != nil {
@@ -174,21 +240,21 @@ func (client *Client) Do(ctx context.Context, method, path string, body, out any
 		response, err := client.httpClient().Do(request)
 		if err != nil {
 			if ctx.Err() != nil {
-				return err
+				return 0, err
 			}
 			if attempt >= attempts {
-				return fmt.Errorf("%s %s: %w", method, path, err)
+				return 0, fmt.Errorf("%s %s: %w", method, path, err)
 			}
 			delay := backoff(attempt)
 			client.logf("%s %s failed (%v), retrying in %s", method, path, err, delay)
 			if err := sleep(ctx, delay); err != nil {
-				return err
+				return 0, err
 			}
 			// The body reader is consumed by the failed attempt.
 			if body != nil {
 				encoded, encodeErr := json.Marshal(body)
 				if encodeErr != nil {
-					return encodeErr
+					return 0, encodeErr
 				}
 				payload = bytes.NewReader(encoded)
 			}
@@ -198,22 +264,22 @@ func (client *Client) Do(ctx context.Context, method, path string, body, out any
 		data, readErr := io.ReadAll(response.Body)
 		closeErr := response.Body.Close()
 		if readErr != nil {
-			return fmt.Errorf("read response: %w", readErr)
+			return 0, fmt.Errorf("read response: %w", readErr)
 		}
 		if closeErr != nil {
-			return fmt.Errorf("close response: %w", closeErr)
+			return 0, fmt.Errorf("close response: %w", closeErr)
 		}
 
 		if retryableStatus(response.StatusCode) && attempt < attempts {
 			delay := retryDelay(response, attempt)
 			client.logf("%s %s returned %d, retrying in %s", method, path, response.StatusCode, delay)
 			if err := sleep(ctx, delay); err != nil {
-				return err
+				return 0, err
 			}
 			if body != nil {
 				encoded, encodeErr := json.Marshal(body)
 				if encodeErr != nil {
-					return encodeErr
+					return 0, encodeErr
 				}
 				payload = bytes.NewReader(encoded)
 			}
@@ -221,14 +287,14 @@ func (client *Client) Do(ctx context.Context, method, path string, body, out any
 		}
 
 		if response.StatusCode >= 300 {
-			return newAPIError(method, path, response.StatusCode, data)
+			return response.StatusCode, newAPIError(method, path, response.StatusCode, data)
 		}
 		if out != nil && len(data) > 0 {
 			if err := json.Unmarshal(data, out); err != nil {
-				return fmt.Errorf("decode response: %w", err)
+				return 0, fmt.Errorf("decode response: %w", err)
 			}
 		}
-		return nil
+		return response.StatusCode, nil
 	}
 }
 
@@ -319,6 +385,20 @@ func (e *APIError) Error() string {
 		return fmt.Sprintf("%s %s: unexpected status %d", e.Method, e.Path, e.StatusCode)
 	}
 	return fmt.Sprintf("%s %s: %d %s", e.Method, e.Path, e.StatusCode, e.Message)
+}
+
+// hasStatus reports whether the error is an APIError with one of the statuses.
+func hasStatus(err error, statuses ...int) bool {
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	for _, status := range statuses {
+		if apiErr.StatusCode == status {
+			return true
+		}
+	}
+	return false
 }
 
 // IsNotFound reports whether the error is a 404, which both forges use to
