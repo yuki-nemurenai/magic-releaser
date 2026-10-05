@@ -25,6 +25,8 @@ ships as a single static binary.
   text file through an `x-magic-release-version` annotation.
 - **Atomic delivery**: the release commit and the tag are pushed together, also from the detached
   HEAD of a CI runner.
+- **Monorepos**: each component released on its own, from the commits that touch its path.
+- **Back-merge** of each release into integration branches such as `develop`.
 - **GitHub and GitLab**, including GitHub Enterprise and self-hosted GitLab.
 
 ## Usage
@@ -54,7 +56,7 @@ jobs:
         run: echo "Released ${{ steps.release.outputs.tag }}"
 ```
 
-`@v1` follows the latest `1.x.y` release; pin `@v1.5.0` to review every update. Both download a
+`@v1` follows the latest `1.x.y` release; pin `@v1.6.0` to review every update. Both download a
 prebuilt binary and verify its checksum.
 
 A release pushed with `GITHUB_TOKEN` does not trigger other workflows: build and deploy in the
@@ -79,14 +81,35 @@ the release. `.magic-releaser-preview` shows the next release in merge requests.
 ### Command line
 
 ```sh
-magic-releaser release --dry-run          # preview the next release, write nothing
-magic-releaser release --push --publish   # release, push and publish
+magic-releaser release --dry-run                       # preview: version, notes, files; writes nothing
+magic-releaser release --push --publish                # release, push and publish
+magic-releaser release --push --push-branch-name main  # on the detached HEAD of a CI runner
+magic-releaser release --back-merge develop --push     # and merge the release into develop
 ```
 
-Binaries are available from [Releases](https://github.com/yuki-nemurenai/magic-releaser/releases),
-the image as `ghcr.io/yuki-nemurenai/magic-releaser`, and the source with
-`go install github.com/yuki-nemurenai/magic-releaser/cmd/magic-releaser@latest`. See the
-[command line reference](docs/configuration.md#command-line).
+| Flag | Description |
+| --- | --- |
+| `--dry-run` | Print the next release without writing anything |
+| `--config` | Config file; default `.magic-releaser.yaml` |
+| `--versioning`, `--calver-format`, `--timezone`, `--tag-format` | Override the config keys of the same name |
+| `--changelog`, `--manifest` | Changelog path (`""` disables it); JSON of the released versions |
+| `--mode` | `direct`, or `pull-request` to only update the files |
+| `--no-commit`, `--no-tag` | Leave the files uncommitted, or skip the tag |
+| `--push` | Push the release commit and the tag in one atomic push |
+| `--push-branch-name` | Branch receiving the release commit; required on a detached HEAD |
+| `--push-tag-only` | With `--push`, push only the tag |
+| `--publish` | Create the GitHub or GitLab release |
+| `--release-name`, `--draft`, `--prerelease` | Title and state of the release |
+| `--back-merge` | Merge the release into these branches, e.g. `develop,candidate` |
+| `--provider`, `--api-url`, `--token` | Forge, API and token, when they cannot be detected |
+| `--output-file` | Append the result as `KEY=value`, e.g. `$GITHUB_OUTPUT` |
+| `--require-previous-release`, `--force-first-release` | Refuse, or force, a first release |
+| `--include-merge-commits` | Analyze merge commits too |
+| `--repo` | Repository path; default the current directory |
+
+Install from [Releases](https://github.com/yuki-nemurenai/magic-releaser/releases), as the image
+`ghcr.io/yuki-nemurenai/magic-releaser`, or from source:
+`go install github.com/yuki-nemurenai/magic-releaser/cmd/magic-releaser@latest`.
 
 ## Inputs
 
@@ -100,9 +123,9 @@ the image as `ghcr.io/yuki-nemurenai/magic-releaser`, and the source with
 | `token` | `${{ github.token }}` | Token used to push and to create the release |
 | `push` | `true` | Push the release commit and the tag |
 | `publish` | `true` | Create the GitHub release |
-| `draft` | `false` | Create the release as a draft |
-| `prerelease` | `false` | Mark the release as a prerelease |
+| `draft`, `prerelease` | `false` | Create the release as a draft, or mark it as a prerelease |
 | `dry-run` | `false` | Only compute and print the release |
+| `back-merge` | from config | Comma separated branches to merge the release into |
 | `args` | | Extra command line arguments |
 
 ## Outputs
@@ -115,38 +138,70 @@ the image as `ghcr.io/yuki-nemurenai/magic-releaser`, and the source with
 | `tag` | `RELEASE_TAG` | Release tag, e.g. `v1.5.0` |
 | `release-url` | `RELEASE_URL` | URL of the GitHub or GitLab release |
 | `release-commit` | `RELEASE_COMMIT` | SHA of the release commit |
+| `components` | `RELEASE_COMPONENTS` | Monorepo: JSON array of the released components |
+| `releases` | `RELEASE_RELEASES` | Monorepo: JSON object of `version`, `previous-version`, `tag` and `release-url` per released component |
 
 ## Configuration
 
 `.magic-releaser.yaml` in the repository root. Every key is optional; command line flags take
-precedence, and unknown keys are an error.
+precedence, and an unknown key is an error. A complete example:
 
 ```yaml
-versioning: calver
-calverFormat: YYYY.0M.MICRO
-timezone: Europe/Moscow
-tagFormat: "{{version}}"
-changelog: CHANGELOG.md
+versioning: calver                  # semver (default) | calver
+calverFormat: YYYY.0M.MICRO         # calver layout
+timezone: Europe/Moscow             # IANA timezone of the calver date; default UTC
+tagFormat: "{{version}}"            # default v{{version}}; {{component}} in a monorepo
+changelog: CHANGELOG.md             # "" disables it
+releaseCommitMessage: "chore(release): {{tag}}"
+releaseName: "Release {{version}}"  # default: the tag on GitHub, Release {{version}} on GitLab
+requirePreviousRelease: true        # no first release from the whole history
+manifest: .release-manifest.json    # JSON of the released versions
+remote: origin
+mode: direct                        # direct | pull-request
+
+notes:
+  preset: conventionalcommits       # conventionalcommits | angular | none
+  style: auto                       # auto | conventional-changelog | keep-a-changelog
+  showContributors: true
+  categories:                       # replaces the preset
+    - title: "⚠️ Breaking Changes"
+      breaking: true                # the section of breaking changes
+    - title: "✨ Features"
+      types: [feat]
+    - title: "🐛 Bug Fixes"
+      types: [fix]
+      scopes: [api, web]            # optional: only these scopes
+    - title: "🧹 Chores"
+      types: [chore]
+      hidden: true
 
 packages:
   - path: .
+    name: app                       # name in the manifest
     files:
-      - type: package-json
-        path: package.json
+      - type: node
+        path: .
+      - type: generic
+        path: src/footer.html
+
+backMerge: [develop]                # branches the release is merged into
 ```
 
-| Key | Default | Description |
-| --- | --- | --- |
-| `versioning` | `semver` | `semver` or `calver` |
-| `calverFormat` | `YYYY.0M.MICRO` | CalVer layout |
-| `timezone` | `UTC` | IANA timezone the CalVer date is read in |
-| `tagFormat` | `v{{version}}` | Tag name, with a `{{version}}` placeholder |
-| `changelog` | `CHANGELOG.md` | Changelog file; `""` disables it |
-| `releaseCommitMessage` | `chore(release): {{tag}}` | Message of the release commit |
-| `releaseName` | by forge | Release title: the tag on GitHub, `Release {{version}}` on GitLab |
-| `requirePreviousRelease` | `false` | Fail instead of making a first release from the whole history |
-| `notes` | | [Release notes](#release-notes) layout |
-| `packages` | | [Files](#version-files) to update |
+| Package key | Description |
+| --- | --- |
+| `path` | Directory of the package; `.` is the repository |
+| `name` | Name in the manifest |
+| `changelog` | Changelog of the package, relative to its `path` |
+| `files` | [Version files](#version-files) to update |
+| `component`, `excludePaths` | [Monorepo](#monorepo) component and the paths it ignores |
+
+| File key | Description |
+| --- | --- |
+| `type` | One of the [file types](#version-files) |
+| `path` | File, relative to the package |
+| `image` | `docker`: the image whose tag is the version |
+| `marker` | `generic`: annotation prefix; default `x-magic-release` |
+| `pattern` | `generic`: regular expression of a version |
 
 The full reference is in [docs/configuration.md](docs/configuration.md).
 
@@ -161,51 +216,116 @@ The full reference is in [docs/configuration.md](docs/configuration.md).
 
 CalVer encodes the release date; the counter resets every period. Layouts are built from `YYYY`,
 `YY`, `0M`, `MM`, `M`, `0D`, `DD`, `D` and `MICRO`, for example `YY.MM.MICRO` or `YYYY.MM.DD`.
+A commit with `[skip release]` in its message is ignored, and merge commits are skipped.
 
 ## Version files
 
 | Type | Updates |
 | --- | --- |
-| `package-json` | `version` in `package.json` |
-| `package-lock` | the root package version in `package-lock.json` |
-| `helm-chart` | `version` and `appVersion` in `Chart.yaml` |
+| `node` | `package.json`, `package-lock.json` and `npm-shrinkwrap.json` |
+| `dotnet` | `Version`, `FileVersion`, `AssemblyVersion` in `.csproj`, `.fsproj` or `Directory.Build.props` |
+| `maven` | the project `version` in `pom.xml` |
+| `python` | `pyproject.toml`, `setup.cfg`, `setup.py` or `__version__` |
+| `rust` | `Cargo.toml` and the package in `Cargo.lock` |
+| `helm` | `version` and `appVersion` in `Chart.yaml` |
+| `php` | `version` in `composer.json` |
+| `ruby` | `VERSION` in `version.rb` |
+| `dart` | `version` in `pubspec.yaml`, keeping the build number |
+| `elixir` | `@version` or `version:` in `mix.exs` |
+| `r` | `Version` in `DESCRIPTION` |
+| `simple` | the whole file, e.g. `version.txt` |
 | `docker` | the tag of a given `image` |
-| `plain` | the whole file, e.g. `version.txt` |
 | `generic` | versions marked with an annotation, in any file |
+
+```yaml
+packages:
+  - path: .
+    files:
+      - type: dotnet
+        path: src/App/App.csproj
+      - type: helm
+        path: chart
+      - type: docker
+        path: deploy/compose.yaml
+        image: ghcr.io/acme/app
+      - type: generic
+        path: docs/install.md
+        marker: x-release-please    # keep release-please annotations
+        pattern: '\d+\.\d+\.\d+'     # optional: how a version looks
+```
+
+`generic` updates the version on an annotated line, or every version in an annotated block:
 
 ```html
 <span>v1.4.0</span> <!-- x-magic-release-version -->
+
+<!-- x-magic-release-start-version -->
+docker pull ghcr.io/acme/app:1.4.0
+<!-- x-magic-release-end -->
 ```
 
-Files are edited in place: formatting and key order are kept. Existing release-please annotations
-work with `marker: x-release-please`.
+Files are edited in place: formatting and key order are kept. The types follow the
+[release types of release-please](https://github.com/googleapis/release-please-action#release-types-supported).
+
+## Monorepo
+
+Name a `component` for each package to release them independently:
+
+```yaml
+packages:
+  - path: services/api
+    component: api
+    files:
+      - type: node
+        path: .
+  - path: web
+    component: web
+    files:
+      - type: node
+        path: .
+  - path: .
+    component: platform
+    excludePaths: [services, web]   # changes there do not release platform
+
+linkedVersions:
+  - [api, web]                      # always released together, at one version
+```
+
+A component is released when commits since its last tag touch its path, with its own version,
+tag (`api-v1.2.0`), `CHANGELOG.md` and GitHub or GitLab release. All released components share one
+release commit and one atomic push. Use the outputs in a build matrix:
+
+```yaml
+strategy:
+  matrix:
+    component: ${{ fromJSON(needs.release.outputs.components) }}
+```
+
+## Back-merge
+
+```yaml
+backMerge:
+  - development
+  - candidate
+```
+
+After the release, each branch receives a merge of the release commit, made by the GitHub or
+GitLab API (`--back-merge` or the `back-merge` input do the same). A branch that cannot be merged automatically, after a conflict or because of a
+project rule, gets a pull or merge request instead, and the job reports a warning.
 
 ## Release notes
 
 Commits are grouped into sections, by default the
-[Conventional Commits](https://www.conventionalcommits.org/) preset. `notes.categories` defines
-your own sections, titles and visibility:
-
-```yaml
-notes:
-  categories:
-    - title: "✨ Features"
-      types: [feat]
-    - title: "🐛 Bug Fixes"
-      types: [fix]
-    - title: "🧹 Chores"
-      types: [chore]
-      hidden: true
-```
-
-Headings follow the forge: `## [1.5.0](compare) (2026-10-02)` on GitHub, as semantic-release, and
-`## [1.5.0] - 2026-10-02` on GitLab, as git-cliff. Breaking changes always get their own section.
+[Conventional Commits](https://www.conventionalcommits.org/) preset; `notes.categories` defines
+your own sections, titles, scopes and visibility, as in the [configuration](#configuration). Presets: `conventionalcommits` (default), `angular` and `none`. Headings follow the forge
+(`notes.style: auto`): `## [1.5.0](compare) (2026-10-02)` on GitHub, as semantic-release, and
+`## [1.5.0] - 2026-10-02` on GitLab, as git-cliff. Breaking changes always get their own section,
+and `showContributors` appends the commit authors.
 
 ## How it works
 
 1. Finds the last release tag reachable from `HEAD`.
-2. Reads the Conventional Commits since that tag. Without `feat`, `fix`, `perf` or breaking
-   commits there is nothing to release.
+2. Reads the Conventional Commits since that tag; without `feat`, `fix` or `perf`, no release.
 3. Computes the next version, never reusing a tag that already exists.
 4. Writes the notes and the changelog, and updates the version files.
 5. Commits them as `chore(release): <tag>`, tags the commit, and pushes both in one atomic push.
@@ -215,15 +335,13 @@ Headings follow the forge: `## [1.5.0](compare) (2026-10-02)` on GitHub, as sema
 
 | From | To |
 | --- | --- |
-| release-please `release-type: simple` | `type: plain` for `version.txt` |
-| release-please `release-type: node` | `type: package-json` and `type: package-lock` |
+| release-please `release-type: <type>` | `type: <type>` of the same name |
 | semantic-release `presetConfig.types` | `notes.categories` |
 | semantic-release `@semantic-release/changelog` | `changelog: CHANGELOG.md` |
 | semantic-release `@semantic-release/exec` | a CI step reading the outputs |
 
-Existing `vX.Y.Z` tags and `CHANGELOG.md` continue as they are. See
-[docs/configuration.md](docs/configuration.md#strategy-switches) to change the tag layout of an
-existing repository.
+Existing `vX.Y.Z` tags and `CHANGELOG.md` continue as they are; to change the tag layout, see
+[strategy switches](docs/configuration.md#strategy-switches).
 
 ## License
 

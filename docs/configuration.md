@@ -26,7 +26,7 @@ timezone: Europe/Moscow
 # reachable from HEAD; for repositories that adopt the tool after a history
 requirePreviousRelease: true
 
-# must contain the {{version}} placeholder
+# must contain the {{version}} placeholder, and {{component}} in a monorepo
 tagFormat: "v{{version}}"
 
 # empty string disables the changelog
@@ -35,9 +35,9 @@ changelog: CHANGELOG.md
 # message of the release commit; {{tag}} and {{version}} are substituted
 releaseCommitMessage: "chore(release): {{tag}}"
 
-# title of the GitHub or GitLab release, same placeholders; by default the
-# tag in the conventional-changelog style and "Release {{version}}" in the
-# keep-a-changelog style
+# title of the GitHub or GitLab release, same placeholders plus {{component}};
+# by default the tag in the conventional-changelog style and
+# "Release {{version}}" in the keep-a-changelog style
 releaseName: "Release {{version}}"
 
 # JSON file that receives the version of every package
@@ -52,23 +52,40 @@ notes:
   style: auto
   showContributors: true
   # categories replaces the preset entirely
-  # categories:
-  #   - title: "⚠ BREAKING CHANGES"
-  #     breaking: true
-  #   - title: Features
-  #     types: [feat]
-  #   - title: Everything else
-  #     types: ["*"]
+  categories:
+    - title: "⚠ BREAKING CHANGES"
+      breaking: true
+    - title: Features
+      types: [feat]
+    - title: API fixes
+      types: [fix]
+      scopes: [api]
+    - title: Chores
+      types: [chore]
+      hidden: true
+    - title: Everything else
+      types: ["*"]
 
+# packages and their version files; a component per package makes it a
+# monorepo (see Monorepo, with excludePaths and linkedVersions)
 packages:
   - name: root
     path: .
     changelog: CHANGELOG.md
     files:
-      - type: package-json
+      - type: node
         path: package.json
+      - type: docker
+        path: deploy/compose.yaml
+        image: ghcr.io/acme/app      # the image whose tag is the version
       - type: generic
         path: src/footer.html
+        marker: x-magic-release      # annotation prefix, the default
+        pattern: '\d+\.\d+\.\d+'     # how a version looks, optional
+
+# branches the release is merged into afterwards
+backMerge:
+  - develop
 ```
 
 ## Versioning
@@ -165,14 +182,29 @@ Only the files listed under `packages` are touched: nothing is discovered or
 guessed. Each file is edited in place, so formatting, key order and comments
 survive and the release commit shows a one line change.
 
+The types follow the release types of release-please. `path` is the file, or
+for `node`, `helm` and `rust` also its directory.
+
 | Type | Effect |
 |------|--------|
-| `package-json` | sets the top level `version`; the key has to exist |
-| `package-lock` | sets the version of the root package of an npm lock file: the top level `version`, and `packages[""].version` from lockfileVersion 2 on |
-| `helm-chart` | sets the top level `version` and `appVersion` |
+| `node` | `package.json`, and next to it `package-lock.json` and `npm-shrinkwrap.json` when they exist (top level `version` and `packages[""].version`) |
+| `dotnet` | the `Version`, `VersionPrefix`, `PackageVersion`, `FileVersion`, `AssemblyVersion` and `InformationalVersion` properties of a `.csproj`, `.fsproj`, `.vbproj` or `Directory.Build.props`; properties computed from others, such as `$(Version)`, are left alone |
+| `maven` | the `<version>` of the `<project>` in `pom.xml`, not the one of the parent or of a dependency |
+| `python` | `[project]` or `[tool.poetry]` of `pyproject.toml`, `[metadata]` of `setup.cfg`, `version=` of `setup.py`, or `__version__` of any other module |
+| `rust` | `[package]` or `[workspace.package]` of `Cargo.toml`, and that package in `Cargo.lock` |
+| `helm` | the top level `version` and `appVersion` of `Chart.yaml` |
+| `php` | the top level `version` of `composer.json` |
+| `ruby` | the `VERSION` constant, as in `lib/<gem>/version.rb` |
+| `dart` | the `version` of `pubspec.yaml`; a `+build` number is kept |
+| `elixir` | the `@version` attribute of `mix.exs`, or the `version:` key of the project |
+| `r` | the `Version` field of `DESCRIPTION` |
+| `simple` | the whole file becomes the version, as `version.txt` |
 | `docker` | rewrites the tag of `image`, which is required: base images are left alone |
-| `plain` | writes the bare version |
 | `generic` | rewrites the versions annotated in the file |
+
+The former names `package-json`, `package-lock`, `helm-chart` and `plain` keep
+their behaviour and print a deprecation warning; use `node`, `helm` and
+`simple` instead.
 
 There is no `go.mod` type: a Go module has no version field, it is versioned
 by its tags alone. Use `tagFormat: "v{{version}}"` for Go modules.
@@ -321,6 +353,79 @@ The release boundary is computed from the full history and all tags. A shallow
 clone is refused with an explanation; use `fetch-depth: 0` on GitHub Actions and
 `GIT_DEPTH: 0` on GitLab CI.
 
+## Monorepo
+
+A package with a `component` turns the repository into a monorepo: every
+package names one, and each is released on its own, as with the manifest
+releaser of release-please.
+
+```yaml
+tagFormat: "{{component}}-v{{version}}"   # the default for a monorepo
+
+packages:
+  - path: .                    # the root package
+    component: app
+    excludePaths: [packages]   # changes there do not release app
+  - path: packages/lib
+    component: lib
+    changelog: CHANGELOG.md    # relative to the package, the default
+    files:
+      - type: node
+        path: .
+
+linkedVersions:
+  - [app, lib]                 # released together, at one version
+```
+
+- **Commits by path.** A component considers the commits since its last tag
+  that change a file under its `path`, apart from `excludePaths`. `.` is the
+  whole repository. A commit may release several components.
+- **Versions and tags.** Each component has its own version and tag; the tag
+  format must contain `{{component}}`. A component without a tag yet gets a
+  first release from the commits of its path; `requirePreviousRelease` asks for
+  a baseline tag such as `lib-v1.0.0` instead.
+- **Files.** Each released component writes `CHANGELOG.md` in its directory and
+  bumps its own `files`. `manifest` records the version of every component.
+- **One release.** The released components share one release commit,
+  `chore(release): lib-v1.3.0, app-v2.1.0`, and their tags reach the remote in
+  one atomic push. Each gets its own GitHub or GitLab release, titled with the
+  tag on GitHub and `Release <component> <version>` on GitLab.
+- **linkedVersions.** When one component of a group is released, all of them
+  are, at the highest version the group computes.
+- **Outputs.** `RELEASE_COMPONENTS` is a JSON array of the released components
+  and `RELEASE_RELEASES` a JSON object with `version`, `previous-version`, `tag`
+  and `release-url` for each; the action exposes them as `components` and
+  `releases`. For GitLab dotenv reports, `RELEASE_<COMPONENT>_CREATED`,
+  `_VERSION`, `_PREVIOUS_VERSION`, `_TAG` and `_URL` are written per component,
+  with the name in upper case and other characters than letters and digits as
+  `_`.
+
+Not supported: the workspace plugins of release-please, which bump the versions
+packages require of each other, and the pull-request mode.
+
+## Back-merge
+
+`backMerge` (or `--back-merge develop,candidate`) lists branches that receive
+each release, for a flow where the release branch is ahead of integration
+branches such as `develop`. It needs `--push`: the forge merges the release
+commit, which has to be on the remote.
+
+- **GitHub** merges the release commit into the branch with the merges API.
+  On a conflict it creates the branch `back-merge/<tag>/<branch>` at the
+  release commit and opens a pull request from it.
+- **GitLab** merges only merge requests: the release commit gets the branch
+  `back-merge/<tag>/<branch>` and a merge request, which is merged, and the
+  branch removed, as soon as GitLab finds it mergeable. A conflict, or a project
+  rule such as a required approval or pipeline, leaves it open.
+
+A request left open is reported as a warning with its link; the release stays
+successful. Other errors, such as a token without the right to merge, fail the
+job after the release is published. A rerun finds the requests it opened.
+
+The merge commit is `chore: back-merge <tag> into <branch>`. A merge made on
+GitHub with `GITHUB_TOKEN` does not start workflows on the branch; pass a
+different token when it has to.
+
 ## Strategy switches
 
 If the repository has version tags that match neither the configured
@@ -380,6 +485,7 @@ magic-releaser version
 | `--release-name` | Release title template |
 | `--draft`, `--prerelease` | Passed through to the forge |
 | `--output-file` | Append the result as `KEY=value` lines, e.g. `$GITHUB_OUTPUT` |
+| `--back-merge` | Merge the release into these branches, e.g. `develop,candidate` |
 | `--include-merge-commits` | Analyze merge commits too |
 | `--require-previous-release` | Fail instead of making a first release when no release tag is reachable |
 | `--force-first-release` | Make a first release anyway |
@@ -399,7 +505,7 @@ magic-releaser version
 
 ## Limitations
 
-- One version per repository; independently versioned packages are not supported.
+- A monorepo does not update the versions its packages require of each other.
 - No plugins: steps after the release are ordinary CI steps reading the outputs.
 - Outside CI, a self-hosted forge whose host name contains neither `github` nor
   `gitlab` needs `--provider` and `--api-url`.
