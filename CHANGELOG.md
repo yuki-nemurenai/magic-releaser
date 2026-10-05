@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.6.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.5.0...v1.6.0) (2026-10-05)
+
+### Features
+
+- release the components of a monorepo independently ([a36656c](https://github.com/yuki-nemurenai/magic-releaser/commit/a36656c21886a094f09f3b379b4d269a212e9eb7))
+- back-merge releases into integration branches ([8ad4220](https://github.com/yuki-nemurenai/magic-releaser/commit/8ad4220d30dd9ac5280df18438a16883a3b6babe))
+- support the release types of release-please ([cbf43ce](https://github.com/yuki-nemurenai/magic-releaser/commit/cbf43ce1c16bd677843168166278f5b4897f36ff))
+
+### Documentation
+
+- document configuration, monorepos and back-merge ([eaa469f](https://github.com/yuki-nemurenai/magic-releaser/commit/eaa469f16ed900a680bd44e8f1c283b481d10d5d))
+
+### Miscellaneous
+
+- **docs:** Update docs ([832f75b](https://github.com/yuki-nemurenai/magic-releaser/commit/832f75b453a1b1ed5f8227d3f035858b9d395ddf))
+
 ## [1.5.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.4.0...v1.5.0) (2026-10-02)
 
 ### Features
