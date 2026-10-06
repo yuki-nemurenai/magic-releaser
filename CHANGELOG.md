@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.1](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.6.0...v1.6.1) (2026-10-06)
+
+### Bug Fixes
+
+- release reverts as a patch, as semantic-release does ([4475972](https://github.com/yuki-nemurenai/magic-releaser/commit/44759727c170c0d34f647a8b073823e1c7ebcb74))
+
 ## [1.6.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.5.0...v1.6.0) (2026-10-05)
 
 ### Features
