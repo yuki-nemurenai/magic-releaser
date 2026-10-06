@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.2](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.6.1...v1.6.2) (2026-10-06)
+
+### Bug Fixes
+
+- list revert among the patch types in the CLI help ([b9210cb](https://github.com/yuki-nemurenai/magic-releaser/commit/b9210cb18ca84903aeb7d006ca47b03aa933db09))
+
 ## [1.6.1](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.6.0...v1.6.1) (2026-10-06)
 
 ### Bug Fixes
