@@ -182,7 +182,7 @@ func runMonorepo(ctx context.Context, git Git, options Options) (Result, error) 
 	}
 	printComponents(options, plans)
 	if len(tags) == 0 {
-		fmt.Fprintln(options.Output, "No release required: no component has feat, fix, perf, or breaking commits.")
+		fmt.Fprintln(options.Output, "No release required: no component has feat, fix, perf, revert or breaking commits.")
 		return result, nil
 	}
 	result.Released = true

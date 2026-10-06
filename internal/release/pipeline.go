@@ -73,7 +73,7 @@ func Run(ctx context.Context, options Options) (Result, error) {
 
 	level := AnalyzeCommitsWithOptions(commits, options.SkipMergeCommits)
 	if level == ReleaseNone {
-		fmt.Fprintln(options.Output, "No release required: no feat, fix, perf, or breaking commits found.")
+		fmt.Fprintln(options.Output, "No release required: no feat, fix, perf, revert or breaking commits found.")
 		return Result{Released: false, LastVersion: lastVersion, Commits: commits}, nil
 	}
 
