@@ -209,14 +209,15 @@ The full reference is in [docs/configuration.md](docs/configuration.md).
 
 | Commit | SemVer | CalVer `YYYY.0M.MICRO` |
 | --- | --- | --- |
-| `fix:`, `perf:` | `1.4.0` → `1.4.1` | `2026.10.0` → `2026.10.1` |
+| `fix:`, `perf:`, `revert:` | `1.4.0` → `1.4.1` | `2026.10.0` → `2026.10.1` |
 | `feat:` | `1.4.0` → `1.5.0` | `2026.10.0` → `2026.10.1` |
 | `feat!:`, `BREAKING CHANGE:` footer | `1.4.0` → `2.0.0` | `2026.10.0` → `2026.10.1` |
 | `docs:`, `chore:`, `ci:`, … | no release | no release |
 
 CalVer encodes the release date; the counter resets every period. Layouts are built from `YYYY`,
 `YY`, `0M`, `MM`, `M`, `0D`, `DD`, `D` and `MICRO`, for example `YY.MM.MICRO` or `YYYY.MM.DD`.
-A commit with `[skip release]` in its message is ignored, and merge commits are skipped.
+A `git revert` message counts as `revert:`. A commit with `[skip release]` in its message is
+ignored, and merge commits are skipped.
 
 ## Version files
 
@@ -325,7 +326,7 @@ and `showContributors` appends the commit authors.
 ## How it works
 
 1. Finds the last release tag reachable from `HEAD`.
-2. Reads the Conventional Commits since that tag; without `feat`, `fix` or `perf`, no release.
+2. Reads the Conventional Commits since that tag; without `feat`, `fix`, `perf` or `revert`, no release.
 3. Computes the next version, never reusing a tag that already exists.
 4. Writes the notes and the changelog, and updates the version files.
 5. Commits them as `chore(release): <tag>`, tags the commit, and pushes both in one atomic push.

@@ -93,8 +93,10 @@ backMerge:
 ### semver
 
 Conventional Commits drive the bump: `feat` gives a minor release,
-`fix` and `perf` a patch release, and a `!` marker or a `BREAKING CHANGE:`
-footer a major release. The first release is `1.0.0`.
+`fix`, `perf` and `revert` a patch release, and a `!` marker or a
+`BREAKING CHANGE:` footer a major release. The message `git revert` writes,
+`Revert "<header>"` with a `This reverts commit <hash>.` line, counts as a
+`revert` commit. The first release is `1.0.0`.
 
 ### calver
 

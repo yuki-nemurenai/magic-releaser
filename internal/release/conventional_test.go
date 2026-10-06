@@ -35,6 +35,56 @@ func TestParseCommitBreakingFooter(t *testing.T) {
 	}
 }
 
+func TestParseCommitGitRevert(t *testing.T) {
+	tests := []struct {
+		name            string
+		message         string
+		wantType        string
+		wantDescription string
+	}{
+		{
+			name:            "git revert message",
+			message:         "Revert \"feat: add calver\"\n\nThis reverts commit 0288516715cdff98c645d5dd6858b95d43a007b5.",
+			wantType:        "revert",
+			wantDescription: "feat: add calver",
+		},
+		{
+			name:            "revert type",
+			message:         "revert: add calver\n\nThis reverts commit 0288516.",
+			wantType:        "revert",
+			wantDescription: "add calver",
+		},
+		{
+			name:            "revert header without the reverted commit",
+			message:         "Revert \"feat: add calver\"",
+			wantType:        "",
+			wantDescription: "Revert \"feat: add calver\"",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			commit := ParseCommit("abcdef123", test.message)
+			if commit.Type != test.wantType || commit.Description != test.wantDescription {
+				t.Fatalf("ParseCommit() = (%q, %q), want (%q, %q)",
+					commit.Type, commit.Description, test.wantType, test.wantDescription)
+			}
+		})
+	}
+}
+
+func TestRevertLandsInRevertsSection(t *testing.T) {
+	commit := ParseCommit("abcdef123", "Revert \"feat: add calver\"\n\nThis reverts commit 0288516.")
+	for _, category := range DefaultCategories(PresetConventionalCommits) {
+		if category.matches(commit) {
+			if category.Title != "Reverts" {
+				t.Fatalf("category = %q, want Reverts", category.Title)
+			}
+			return
+		}
+	}
+	t.Fatal("no category matches the revert")
+}
+
 func TestParseCommitSkipRelease(t *testing.T) {
 	commit := ParseCommit("abcdef123", "feat: add endpoint\n\n[skip release]")
 
@@ -71,6 +121,13 @@ func TestAnalyzeCommits(t *testing.T) {
 				ParseCommit("2", "refactor!: redesign API"),
 			},
 			want: ReleaseMajor,
+		},
+		{
+			name: "revert means patch",
+			commits: []Commit{
+				ParseCommit("1", "Revert \"feat: add calver\"\n\nThis reverts commit 0288516."),
+			},
+			want: ReleasePatch,
 		},
 		{
 			name: "docs do not release",

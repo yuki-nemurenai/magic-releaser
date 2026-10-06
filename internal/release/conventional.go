@@ -7,6 +7,13 @@ import (
 
 var headerPattern = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9-]*)(?:\(([^()\r\n]+)\))?(!)?: (.+)$`)
 
+// gitRevertPattern and revertedCommitPattern recognise the message git revert
+// writes, which semantic-release counts as a revert alongside the revert type.
+var (
+	gitRevertPattern      = regexp.MustCompile(`^Revert "(.+)"$`)
+	revertedCommitPattern = regexp.MustCompile(`(?m)^This reverts commit [0-9a-fA-F]+`)
+)
+
 // breakingMarkers are the footers that mark a breaking change. The message text
 // behind the marker is the actual explanation and must survive into the notes.
 var breakingMarkers = []string{"BREAKING CHANGE:", "BREAKING-CHANGE:"}
@@ -25,6 +32,13 @@ func ParseCommit(hash, message string) Commit {
 
 	breakingBody := breakingFooterBody(message)
 	commit.BreakingBody = breakingBody
+
+	if reverted, ok := gitRevert(commit.Header, message); ok {
+		commit.Type = "revert"
+		commit.Description = reverted
+		commit.Breaking = breakingBody != ""
+		return commit
+	}
 
 	matches := headerPattern.FindStringSubmatch(commit.Header)
 	if matches == nil {
@@ -68,7 +82,7 @@ func CommitReleaseLevel(commit Commit) Level {
 	switch commit.Type {
 	case "feat":
 		return ReleaseMinor
-	case "fix", "perf":
+	case "fix", "perf", "revert":
 		return ReleasePatch
 	default:
 		return ReleaseNone
@@ -111,6 +125,17 @@ func breakingFooterBody(message string) string {
 		}
 	}
 	return ""
+}
+
+// gitRevert returns the header of the reverted commit when the message is the
+// one git revert writes: a Revert "<header>" header and a This reverts commit
+// line in the body.
+func gitRevert(header, message string) (string, bool) {
+	matches := gitRevertPattern.FindStringSubmatch(header)
+	if matches == nil || !revertedCommitPattern.MatchString(message) {
+		return "", false
+	}
+	return matches[1], true
 }
 
 // looksLikeMerge is a cheap header check used when the parent count is not
