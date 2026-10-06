@@ -37,7 +37,7 @@ func newRootCommand() *cobra.Command {
 
 It supports two versioning strategies:
   semver  Semantic Versioning rules compatible with Semantic Release:
-          feat -> minor, fix/perf -> patch, breaking changes -> major.
+          feat -> minor, fix/perf/revert -> patch, breaking changes -> major.
   calver  Calendar Versioning in YYYY.0M.MICRO format:
           year/month (UTC unless --timezone is set) with MICRO incremented
           per release in the same month.`,
@@ -66,7 +66,7 @@ func newReleaseCommand() *cobra.Command {
 		Long: `Analyze Conventional Commits since the latest release tag and create the next release.
 
 Versioning strategies:
-  semver  feat -> minor, fix/perf -> patch, breaking changes -> major.
+  semver  feat -> minor, fix/perf/revert -> patch, breaking changes -> major.
   calver  YYYY.0M.MICRO by default, dated in UTC unless --timezone is set,
           with MICRO incremented within a month.
 
