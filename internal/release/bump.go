@@ -233,8 +233,9 @@ func jsonValueRange(data []byte, key string) (int, int, bool, error) {
 }
 
 // helmVersionLine matches a top level version or appVersion key, keeping the
-// quoting and any trailing comment of the line intact.
-var helmVersionLine = regexp.MustCompile(`(?m)^((?:version|appVersion):[ \t]*)(["']?)[^"'\s#]+(["']?)`)
+// quoting and any trailing comment of the line intact. A quoted value may be
+// empty, as the appVersion: "" of a new chart.
+var helmVersionLine = regexp.MustCompile(`(?m)^((?:version|appVersion):[ \t]*)(?:(["'])[^"'\r\n]*["']|[^"'\s#]+)`)
 
 // bumpHelmChart rewrites the chart version and appVersion in place. Encoding
 // the parsed document again would drop every comment and reorder the keys.
@@ -246,7 +247,7 @@ func bumpHelmChart(path, version string) error {
 	if !regexp.MustCompile(`(?m)^version:`).Match(data) {
 		return errors.New("no top level version key")
 	}
-	output := helmVersionLine.ReplaceAll(data, []byte("${1}${2}"+version+"${3}"))
+	output := helmVersionLine.ReplaceAll(data, []byte("${1}${2}"+version+"${2}"))
 	return os.WriteFile(path, output, 0o644)
 }
 

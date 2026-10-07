@@ -110,6 +110,20 @@ func TestBumpHelmChartKeepsTheFileIntact(t *testing.T) {
 	}
 }
 
+// The empty appVersion of a new chart was left empty.
+func TestBumpHelmChartFillsAnEmptyAppVersion(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "Chart.yaml", "apiVersion: v2\nname: demo\nversion: 0.1.0\nappVersion: \"\"\n")
+
+	if err := bumpHelmChart(filepath.Join(dir, "Chart.yaml"), "1.1.0"); err != nil {
+		t.Fatalf("bumpHelmChart() error = %v", err)
+	}
+	want := "apiVersion: v2\nname: demo\nversion: 1.1.0\nappVersion: \"1.1.0\"\n"
+	if got := readFile(t, dir, "Chart.yaml"); got != want {
+		t.Fatalf("Chart.yaml =\n%s\nwant\n%s", got, want)
+	}
+}
+
 // Without an image every reference, base images included, was retagged.
 func TestBumpDockerRequiresTheImage(t *testing.T) {
 	dir := t.TempDir()
