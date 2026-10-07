@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.6.3](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.6.2...v1.6.3) (2026-10-07)
+
+### Bug Fixes
+
+- Fill an empty appVersion of a Helm chart ([6e7f77b](https://github.com/yuki-nemurenai/magic-releaser/commit/6e7f77b45b69563651bd49925b3c2781013bc70c))
+
+### Miscellaneous
+
+- Mention revert in the no-release message ([d52a7b8](https://github.com/yuki-nemurenai/magic-releaser/commit/d52a7b89f8c6b4668c4d99295013ef19db545a1d))
+
 ## [1.6.2](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.6.1...v1.6.2) (2026-10-06)
 
 ### Bug Fixes
