@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.7.0](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.6.3...v1.7.0) (2026-11-25)
+
+### Features
+
+- **publisher:** set GitLab back-merge requests waiting for a pipeline to auto-merge ([8b1825f](https://github.com/yuki-nemurenai/magic-releaser/commit/8b1825f88b5e0756058819acbcc764ffb9818bb4))
+
+### Miscellaneous
+
+- **deps:** bump github.com/go-git/go-git/v5 from 5.19.2 to 5.19.3 ([eebf173](https://github.com/yuki-nemurenai/magic-releaser/commit/eebf17370493f01be2fbeab4fac85e5ecec714be))
+
 ## [1.6.3](https://github.com/yuki-nemurenai/magic-releaser/compare/v1.6.2...v1.6.3) (2026-10-07)
 
 ### Bug Fixes
