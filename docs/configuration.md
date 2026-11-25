@@ -417,8 +417,12 @@ commit, which has to be on the remote.
   release commit and opens a pull request from it.
 - **GitLab** merges only merge requests: the release commit gets the branch
   `back-merge/<tag>/<branch>` and a merge request, which is merged, and the
-  branch removed, as soon as GitLab finds it mergeable. A conflict, or a project
-  rule such as a required approval or pipeline, leaves it open.
+  branch removed, as soon as GitLab finds it mergeable. A request that waits
+  only for its pipeline (`ci_still_running`, or `ci_must_pass` before the
+  pipeline is created) is set to auto-merge and merges itself when the pipeline
+  succeeds; the job reports its link. The pipeline of the branch has to be
+  created, so `workflow:rules` must not skip `back-merge/*` branches. A
+  conflict, or another project rule such as a required approval, leaves it open.
 
 A request left open is reported as a warning with its link; the release stays
 successful. Other errors, such as a token without the right to merge, fail the

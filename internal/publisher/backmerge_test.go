@@ -204,6 +204,66 @@ func TestGitLabBackMerge(t *testing.T) {
 	}
 }
 
+// A merge request that waits only for its pipeline is set to merge when the
+// pipeline succeeds instead of being left to a person.
+func TestGitLabBackMergeWaitingForPipelineIsSetToAutoMerge(t *testing.T) {
+	tests := []struct {
+		name        string
+		status      string
+		mergeCode   int
+		mergeState  string
+		wantOutcome BackMergeOutcome
+		wantReason  string
+	}{
+		{name: "pipeline running", status: "ci_still_running", mergeCode: http.StatusOK, mergeState: "opened", wantOutcome: BackMergeAutoMerge},
+		{name: "pipeline not created yet", status: "ci_must_pass", mergeCode: http.StatusOK, mergeState: "opened", wantOutcome: BackMergeAutoMerge},
+		{name: "pipeline finished meanwhile", status: "ci_still_running", mergeCode: http.StatusOK, mergeState: "merged", wantOutcome: BackMerged},
+		{name: "auto-merge refused", status: "ci_must_pass", mergeCode: http.StatusMethodNotAllowed, wantOutcome: BackMergePending, wantReason: "405"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var mergeBody map[string]any
+			pub := newBackMergePublisher(t, gitlabInfo(), func(w http.ResponseWriter, r *http.Request) {
+				path := r.URL.EscapedPath()
+				project := "/projects/group%2Fsubgroup%2Fdemo"
+				switch {
+				case path == project+"/repository/compare":
+					_, _ = w.Write([]byte(`{"commits":[{"id":"x"}]}`))
+				case path == project+"/repository/branches":
+					w.WriteHeader(http.StatusCreated)
+				case r.Method == http.MethodPost && path == project+"/merge_requests":
+					w.WriteHeader(http.StatusCreated)
+					_, _ = w.Write([]byte(`{"iid":1,"web_url":"https://gitlab.com/mr/1","detailed_merge_status":"` + tt.status + `"}`))
+				case r.Method == http.MethodPut && path == project+"/merge_requests/1/merge":
+					_ = json.NewDecoder(r.Body).Decode(&mergeBody)
+					w.WriteHeader(tt.mergeCode)
+					if tt.mergeCode != http.StatusOK {
+						_, _ = w.Write([]byte(`{"message":"Method Not Allowed"}`))
+						return
+					}
+					_, _ = w.Write([]byte(`{"iid":1,"state":"` + tt.mergeState + `"}`))
+				default:
+					t.Errorf("unexpected request %s %s", r.Method, path)
+				}
+			})
+
+			results, err := pub.BackMerge(context.Background(), backMergeRequest(gitlabInfo(), "develop"))
+			if err != nil {
+				t.Fatalf("BackMerge() error = %v", err)
+			}
+			if results[0].Outcome != tt.wantOutcome || results[0].URL != "https://gitlab.com/mr/1" {
+				t.Fatalf("result = %+v, want %s", results[0], tt.wantOutcome)
+			}
+			if !strings.Contains(results[0].Reason, tt.wantReason) {
+				t.Fatalf("reason = %q, want %q", results[0].Reason, tt.wantReason)
+			}
+			if mergeBody["auto_merge"] != true || mergeBody["merge_when_pipeline_succeeds"] != true {
+				t.Fatalf("merge body = %v, want auto-merge", mergeBody)
+			}
+		})
+	}
+}
+
 func itoa(n int) string {
 	return string(rune('0' + n))
 }

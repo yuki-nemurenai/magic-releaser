@@ -417,6 +417,9 @@ func backMerge(ctx context.Context, git Git, options Options, repo repository.In
 			fmt.Fprintf(options.Output, "Back-merged %s into %s\n", result.TagName, merge.Target)
 		case publisher.BackMergeUpToDate:
 			fmt.Fprintf(options.Output, "%s already contains %s\n", merge.Target, result.TagName)
+		case publisher.BackMergeAutoMerge:
+			fmt.Fprintf(options.Output, "Back-merge of %s into %s merges when its pipeline succeeds: %s\n",
+				result.TagName, merge.Target, merge.URL)
 		case publisher.BackMergePending:
 			fmt.Fprintf(options.ErrorOutput, "warning: back-merge of %s into %s needs a person (%s): %s\n",
 				result.TagName, merge.Target, merge.Reason, merge.URL)

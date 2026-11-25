@@ -312,7 +312,9 @@ backMerge:
 
 After the release, each branch receives a merge of the release commit, made by the GitHub or
 GitLab API (`--back-merge` or the `back-merge` input do the same). A branch that cannot be merged automatically, after a conflict or because of a
-project rule, gets a pull or merge request instead, and the job reports a warning.
+project rule, gets a pull or merge request instead, and the job reports a warning. A GitLab
+merge request that waits only for its pipeline is set to auto-merge and merges itself when the
+pipeline succeeds.
 
 ## Release notes
 

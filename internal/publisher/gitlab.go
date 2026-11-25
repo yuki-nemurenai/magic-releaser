@@ -99,14 +99,16 @@ const mergeStatusPolls = 30
 type gitlabMergeRequest struct {
 	IID                 int    `json:"iid"`
 	WebURL              string `json:"web_url"`
+	State               string `json:"state"`
 	DetailedMergeStatus string `json:"detailed_merge_status"`
 }
 
 // BackMerge merges the release commit into each target. GitLab merges only
 // merge requests, so the release commit gets a branch and a merge request,
-// which is merged right away when GitLab finds it mergeable. Otherwise, after
-// a conflict or a project rule such as a required approval, it stays open for
-// a person.
+// which is merged right away when GitLab finds it mergeable. A request that
+// waits only for its pipeline ("Pipelines must succeed") is set to merge when
+// the pipeline succeeds. Otherwise, after a conflict or a project rule such as
+// a required approval, it stays open for a person.
 func (p *gitlabPublisher) BackMerge(ctx context.Context, request BackMergeRequest) ([]BackMergeResult, error) {
 	base := "/projects/" + url.PathEscape(request.Repository.Slug)
 	results := make([]BackMergeResult, 0, len(request.Targets))
@@ -184,8 +186,15 @@ func mergeStatusPending(status string) bool {
 	}
 }
 
+// mergeStatusWaitsForPipeline reports whether the only thing a merge request
+// waits for is its pipeline: one is running, or none has been created yet for
+// a project where pipelines must succeed.
+func mergeStatusWaitsForPipeline(status string) bool {
+	return status == "ci_still_running" || status == "ci_must_pass"
+}
+
 // mergeWhenMergeable waits for GitLab to check the merge request and merges
-// it when it can be merged.
+// it when it can be merged, or sets it to merge when its pipeline succeeds.
 func (p *gitlabPublisher) mergeWhenMergeable(ctx context.Context, base string, mergeRequest gitlabMergeRequest, target, title string) (BackMergeResult, error) {
 	path := fmt.Sprintf("%s/merge_requests/%d", base, mergeRequest.IID)
 	for poll := 0; poll < mergeStatusPolls && mergeStatusPending(mergeRequest.DetailedMergeStatus); poll++ {
@@ -198,17 +207,30 @@ func (p *gitlabPublisher) mergeWhenMergeable(ctx context.Context, base string, m
 	}
 	pending := BackMergeResult{Target: target, Outcome: BackMergePending, URL: mergeRequest.WebURL,
 		Reason: mergeRequest.DetailedMergeStatus}
-	if mergeRequest.DetailedMergeStatus != "mergeable" {
+	waitsForPipeline := mergeStatusWaitsForPipeline(mergeRequest.DetailedMergeStatus)
+	if mergeRequest.DetailedMergeStatus != "mergeable" && !waitsForPipeline {
 		if mergeStatusPending(pending.Reason) {
 			pending.Reason = "not checked in time"
 		}
 		return pending, nil
 	}
-	err := p.client.Do(ctx, http.MethodPut, path+"/merge", map[string]any{
+	payload := map[string]any{
 		"merge_commit_message":        title,
 		"should_remove_source_branch": true,
-	}, nil)
+	}
+	if waitsForPipeline {
+		// auto_merge replaced merge_when_pipeline_succeeds in GitLab 17.11;
+		// older versions ignore it and read the deprecated parameter.
+		payload["auto_merge"] = true
+		payload["merge_when_pipeline_succeeds"] = true
+	}
+	var merged gitlabMergeRequest
+	err := p.client.Do(ctx, http.MethodPut, path+"/merge", payload, &merged)
 	if err == nil {
+		// GitLab merges at once when the pipeline finished in the meantime.
+		if waitsForPipeline && merged.State != "merged" {
+			return BackMergeResult{Target: target, Outcome: BackMergeAutoMerge, URL: mergeRequest.WebURL}, nil
+		}
 		return BackMergeResult{Target: target, Outcome: BackMerged, URL: mergeRequest.WebURL}, nil
 	}
 	// The project refused the merge (merge method, pipeline or approval rules):

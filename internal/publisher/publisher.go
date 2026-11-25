@@ -84,13 +84,16 @@ const (
 	// BackMergePending means a pull or merge request waits for a person,
 	// because of a conflict or a rule of the forge.
 	BackMergePending BackMergeOutcome = "pending"
+	// BackMergeAutoMerge means the forge merges the request by itself once its
+	// pipeline succeeds.
+	BackMergeAutoMerge BackMergeOutcome = "auto-merge"
 )
 
 // BackMergeResult is the outcome for one target branch.
 type BackMergeResult struct {
 	Target  string
 	Outcome BackMergeOutcome
-	// URL is the pull or merge request of a pending back-merge.
+	// URL is the pull or merge request of a pending or auto-merged back-merge.
 	URL string
 	// Reason explains a pending back-merge, e.g. a conflict.
 	Reason string
